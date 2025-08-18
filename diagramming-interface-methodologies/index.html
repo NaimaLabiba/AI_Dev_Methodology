@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagramming Interface</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top Toolbar -->
+    <div class="toolbar">
+        <button id="newBtn" title="New Diagram">📄 New</button>
+        <button id="saveBtn" title="Save Diagram">💾 Save</button>
+        <button id="exportBtn" title="Export as PNG">📤 Export</button>
+        <div class="separator"></div>
+        <button id="undoBtn" title="Undo">↶ Undo</button>
+        <button id="redoBtn" title="Redo">↷ Redo</button>
+        <div class="separator"></div>
+        <button id="zoomInBtn" title="Zoom In">🔍+ </button>
+        <button id="zoomOutBtn" title="Zoom Out">🔍- </button>
+        <button id="resetZoomBtn" title="Reset Zoom">100%</button>
+        <div class="separator"></div>
+        <div class="methodology-selector">
+            <label for="methodologySelect">Methodology:</label>
+            <select id="methodologySelect">
+                <option value="manual">Manual</option>
+                <option value="tdd">TDD</option>
+                <option value="bdd">BDD</option>
+                <option value="ddd">DDD</option>
+                <option value="sdd">SDD</option>
+            </select>
+            <button id="viewMethodologyBtn" title="View Methodology Details">📖 View</button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-container">
+        <!-- Left Toolbox Panel -->
+        <div class="toolbox-panel">
+            <h3>Shapes</h3>
+            <div class="shape-category">
+                <h4>Basic Shapes</h4>
+                <div class="shape-grid">
+                    <div class="shape-item" data-shape="rectangle" draggable="true">
+                        <div class="shape-preview rectangle-preview"></div>
+                        <span>Rectangle</span>
+                    </div>
+                    <div class="shape-item" data-shape="circle" draggable="true">
+                        <div class="shape-preview circle-preview"></div>
+                        <span>Circle</span>
+                    </div>
+                    <div class="shape-item" data-shape="diamond" draggable="true">
+                        <div class="shape-preview diamond-preview"></div>
+                        <span>Diamond</span>
+                    </div>
+                    <div class="shape-item" data-shape="triangle" draggable="true">
+                        <div class="shape-preview triangle-preview"></div>
+                        <span>Triangle</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="shape-category">
+                <h4>Flowchart</h4>
+                <div class="shape-grid">
+                    <div class="shape-item" data-shape="process" draggable="true">
+                        <div class="shape-preview process-preview"></div>
+                        <span>Process</span>
+                    </div>
+                    <div class="shape-item" data-shape="decision" draggable="true">
+                        <div class="shape-preview decision-preview"></div>
+                        <span>Decision</span>
+                    </div>
+                    <div class="shape-item" data-shape="start-end" draggable="true">
+                        <div class="shape-preview start-end-preview"></div>
+                        <span>Start/End</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="shape-category">
+                <h4>Tools</h4>
+                <div class="shape-grid">
+                    <div class="shape-item" data-shape="text" draggable="true">
+                        <div class="shape-preview text-preview">T</div>
+                        <span>Text</span>
+                    </div>
+                    <div class="shape-item" data-shape="arrow" draggable="true">
+                        <div class="shape-preview arrow-preview">→</div>
+                        <span>Arrow</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Canvas Area -->
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <canvas id="diagramCanvas" width="1200" height="800"></canvas>
+                <div class="canvas-overlay" id="canvasOverlay"></div>
+            </div>
+            <div class="canvas-info">
+                <span id="canvasInfo">Ready | Zoom: 100%</span>
+            </div>
+        </div>
+
+        <!-- Right Properties Panel -->
+        <div class="properties-panel">
+            <h3>Properties</h3>
+            <div class="property-section" id="noSelection">
+                <p>Select an element to edit its properties</p>
+            </div>
+            
+            <div class="property-section" id="elementProperties" style="display: none;">
+                <div class="property-group">
+                    <label>Fill Color:</label>
+                    <input type="color" id="fillColor" value="#ffffff">
+                </div>
+                
+                <div class="property-group">
+                    <label>Border Color:</label>
+                    <input type="color" id="borderColor" value="#000000">
+                </div>
+                
+                <div class="property-group">
+                    <label>Border Width:</label>
+                    <input type="range" id="borderWidth" min="1" max="10" value="2">
+                    <span id="borderWidthValue">2px</span>
+                </div>
+                
+                <div class="property-group">
+                    <label>Text:</label>
+                    <textarea id="elementText" rows="3" placeholder="Enter text..."></textarea>
+                </div>
+                
+                <div class="property-group">
+                    <label>Font Size:</label>
+                    <input type="range" id="fontSize" min="8" max="48" value="14">
+                    <span id="fontSizeValue">14px</span>
+                </div>
+                
+                <div class="property-group">
+                    <label>Position:</label>
+                    <div class="position-inputs">
+                        <input type="number" id="posX" placeholder="X">
+                        <input type="number" id="posY" placeholder="Y">
+                    </div>
+                </div>
+                
+                <div class="property-group">
+                    <label>Size:</label>
+                    <div class="size-inputs">
+                        <input type="number" id="width" placeholder="Width">
+                        <input type="number" id="height" placeholder="Height">
+                    </div>
+                </div>
+                
+                <div class="property-actions">
+                    <button class="property-btn delete-btn" id="deleteElement">Delete</button>
+                    <button class="property-btn" id="duplicateElement">Duplicate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Methodology Modal -->
+    <div id="methodologyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Development Methodology</h2>
+                <span class="close" id="closeModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="methodologyContent">
+                    <!-- Methodology content will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeModalBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

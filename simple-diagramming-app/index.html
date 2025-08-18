@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Diagramming App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <button id="addRectangleBtn" class="tool-btn">📦 Add Rectangle</button>
+        <button id="addCircleBtn" class="tool-btn">⭕ Add Circle</button>
+        <div class="separator"></div>
+        <button id="saveBtn" class="tool-btn">💾 Save</button>
+        <button id="loadBtn" class="tool-btn">📂 Load</button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+        <div class="separator"></div>
+        <button id="exportMarkdownBtn" class="tool-btn">📝 Export MD</button>
+        <button id="exportPngBtn" class="tool-btn">🖼️ Export PNG</button>
+        <button id="exportSvgBtn" class="tool-btn">🎨 Export SVG</button>
+        <div class="separator"></div>
+        <button id="clearBtn" class="tool-btn">🗑️ Clear</button>
+    </div>
+
+    <!-- Main Canvas Area -->
+    <div class="canvas-container">
+        <canvas id="canvas" width="1200" height="800"></canvas>
+        <div id="canvasOverlay" class="canvas-overlay"></div>
+    </div>
+
+    <!-- Properties Panel (appears when shape is selected) -->
+    <div id="propertiesPanel" class="properties-panel" style="display: none;">
+        <h3>Shape Properties</h3>
+        <div class="property-group">
+            <label for="shapeLabel">Label:</label>
+            <input type="text" id="shapeLabel" placeholder="Enter label">
+        </div>
+        <div class="property-group">
+            <label for="shapeColor">Color:</label>
+            <input type="color" id="shapeColor" value="#ffffff">
+        </div>
+        <div class="property-actions">
+            <button id="deleteShapeBtn" class="delete-btn">Delete</button>
+            <button id="closePropertiesBtn">Close</button>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <span id="statusText">Ready - Click "Add Rectangle" or "Add Circle" to start</span>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
