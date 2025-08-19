@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BDD Diagramming Interface</title>
+    <link rel="stylesheet" href="bdd-styles.css">
+</head>
+<body>
+    <!-- BDD Methodology Header (Fixed Top-Right) -->
+    <div id="bddMethodologyHeader" class="bdd-methodology-header">
+        <div class="methodology-badge">
+            <span class="methodology-icon">🟢</span>
+            <span class="methodology-text">BDD</span>
+            <span class="methodology-subtitle">Given-When-Then</span>
+        </div>
+    </div>
+
+    <!-- Top Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-section">
+            <button id="newBtn" title="New Diagram">📄 New</button>
+            <button id="importBtn" title="Import BDD Markdown">📥 Import MD</button>
+            <button id="saveBtn" title="Save Diagram">💾 Save</button>
+            <button id="exportBtn" title="Export Options">📤 Export</button>
+        </div>
+        
+        <div class="toolbar-separator"></div>
+        
+        <div class="toolbar-section">
+            <button id="undoBtn" title="Undo">↶ Undo</button>
+            <button id="redoBtn" title="Redo">↷ Redo</button>
+        </div>
+        
+        <div class="toolbar-separator"></div>
+        
+        <div class="toolbar-section">
+            <button id="zoomInBtn" title="Zoom In">🔍+</button>
+            <button id="zoomOutBtn" title="Zoom Out">🔍-</button>
+            <button id="resetZoomBtn" title="Reset Zoom">100%</button>
+            <button id="fitToScreenBtn" title="Fit to Screen">⤢ Fit</button>
+        </div>
+        
+        <div class="toolbar-separator"></div>
+        
+        <div class="toolbar-section">
+            <div class="document-switcher">
+                <label for="documentSelect">Document:</label>
+                <select id="documentSelect">
+                    <option value="">Select Document...</option>
+                </select>
+                <button id="addDocumentBtn" title="Add Document">+ Add</button>
+            </div>
+        </div>
+        
+        <div class="toolbar-separator"></div>
+        
+        <div class="toolbar-section">
+            <button id="outcomesBtn" title="Business Outcomes Panel">🎯 Outcomes</button>
+            <button id="layersBtn" title="Layers Panel">📋 Layers</button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-container">
+        <!-- Left Toolbox Panel -->
+        <div class="toolbox-panel">
+            <div class="panel-header">
+                <h3>BDD Shapes</h3>
+                <button class="panel-toggle" id="toolboxToggle">−</button>
+            </div>
+            
+            <div class="panel-content">
+                <div class="shape-category">
+                    <h4>Flow Elements</h4>
+                    <div class="shape-grid">
+                        <div class="shape-item" data-shape="start" draggable="true">
+                            <div class="shape-preview start-preview"></div>
+                            <span>Start</span>
+                        </div>
+                        <div class="shape-item" data-shape="action" draggable="true">
+                            <div class="shape-preview action-preview"></div>
+                            <span>Action</span>
+                        </div>
+                        <div class="shape-item" data-shape="decision" draggable="true">
+                            <div class="shape-preview decision-preview"></div>
+                            <span>Decision</span>
+                        </div>
+                        <div class="shape-item" data-shape="end" draggable="true">
+                            <div class="shape-preview end-preview"></div>
+                            <span>End</span>
+                        </div>
+                        <div class="shape-item" data-shape="timer" draggable="true">
+                            <div class="shape-preview timer-preview">⏱</div>
+                            <span>Timer</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="shape-category">
+                    <h4>Sequence Elements</h4>
+                    <div class="shape-grid">
+                        <div class="shape-item" data-shape="participant" draggable="true">
+                            <div class="shape-preview participant-preview"></div>
+                            <span>Participant</span>
+                        </div>
+                        <div class="shape-item" data-shape="lifeline" draggable="true">
+                            <div class="shape-preview lifeline-preview">|</div>
+                            <span>Lifeline</span>
+                        </div>
+                        <div class="shape-item" data-shape="message" draggable="true">
+                            <div class="shape-preview message-preview">→</div>
+                            <span>Message</span>
+                        </div>
+                        <div class="shape-item" data-shape="fragment" draggable="true">
+                            <div class="shape-preview fragment-preview">alt</div>
+                            <span>Fragment</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="shape-category">
+                    <h4>Annotations</h4>
+                    <div class="shape-grid">
+                        <div class="shape-item" data-shape="text" draggable="true">
+                            <div class="shape-preview text-preview">T</div>
+                            <span>Text</span>
+                        </div>
+                        <div class="shape-item" data-shape="note" draggable="true">
+                            <div class="shape-preview note-preview">📝</div>
+                            <span>Note</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Canvas Area -->
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <canvas id="diagramCanvas" width="1200" height="800"></canvas>
+                <div class="canvas-overlay" id="canvasOverlay"></div>
+                
+                <!-- Canvas Grid -->
+                <div class="canvas-grid" id="canvasGrid"></div>
+                
+                <!-- Quick Add Handles -->
+                <div class="quick-add-handles" id="quickAddHandles"></div>
+            </div>
+            
+            <div class="canvas-info">
+                <span id="canvasInfo">Ready | Zoom: 100%</span>
+                <div class="canvas-controls">
+                    <button id="gridToggle" title="Toggle Grid">⊞</button>
+                    <button id="snapToggle" title="Toggle Snap">🧲</button>
+                    <button id="guidesToggle" title="Toggle Guides">📏</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Properties Panel -->
+        <div class="properties-panel">
+            <div class="panel-header">
+                <h3>Properties</h3>
+                <button class="panel-toggle" id="propertiesToggle">−</button>
+            </div>
+            
+            <div class="panel-content">
+                <div class="property-section" id="noSelection">
+                    <p>Select an element to edit its properties</p>
+                    <div class="canvas-actions">
+                        <button id="selectAllBtn">Select All</button>
+                        <button id="clearCanvasBtn">Clear Canvas</button>
+                    </div>
+                </div>
+                
+                <div class="property-section" id="elementProperties" style="display: none;">
+                    <div class="property-tabs">
+                        <button class="tab-btn active" data-tab="style">Style</button>
+                        <button class="tab-btn" data-tab="content">Content</button>
+                        <button class="tab-btn" data-tab="position">Position</button>
+                    </div>
+                    
+                    <div class="tab-content active" id="styleTab">
+                        <div class="property-group">
+                            <label>Fill Color:</label>
+                            <input type="color" id="fillColor" value="#ffffff">
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Border Color:</label>
+                            <input type="color" id="borderColor" value="#000000">
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Border Width:</label>
+                            <input type="range" id="borderWidth" min="1" max="10" value="2">
+                            <span id="borderWidthValue">2px</span>
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Opacity:</label>
+                            <input type="range" id="opacity" min="0" max="100" value="100">
+                            <span id="opacityValue">100%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="contentTab">
+                        <div class="property-group">
+                            <label>Text:</label>
+                            <textarea id="elementText" rows="3" placeholder="Enter text..."></textarea>
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Font Size:</label>
+                            <input type="range" id="fontSize" min="8" max="48" value="14">
+                            <span id="fontSizeValue">14px</span>
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Font Weight:</label>
+                            <select id="fontWeight">
+                                <option value="normal">Normal</option>
+                                <option value="bold">Bold</option>
+                            </select>
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Text Align:</label>
+                            <select id="textAlign">
+                                <option value="center">Center</option>
+                                <option value="left">Left</option>
+                                <option value="right">Right</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-content" id="positionTab">
+                        <div class="property-group">
+                            <label>Position:</label>
+                            <div class="position-inputs">
+                                <input type="number" id="posX" placeholder="X">
+                                <input type="number" id="posY" placeholder="Y">
+                            </div>
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Size:</label>
+                            <div class="size-inputs">
+                                <input type="number" id="width" placeholder="Width">
+                                <input type="number" id="height" placeholder="Height">
+                            </div>
+                        </div>
+                        
+                        <div class="property-group">
+                            <label>Rotation:</label>
+                            <input type="range" id="rotation" min="0" max="360" value="0">
+                            <span id="rotationValue">0°</span>
+                        </div>
+                    </div>
+                    
+                    <div class="property-actions">
+                        <button class="property-btn delete-btn" id="deleteElement">Delete</button>
+                        <button class="property-btn" id="duplicateElement">Duplicate</button>
+                        <button class="property-btn" id="bringToFrontBtn">Bring to Front</button>
+                        <button class="property-btn" id="sendToBackBtn">Send to Back</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Business Outcomes Panel -->
+    <div id="outcomesPanel" class="side-panel">
+        <div class="panel-header">
+            <h3>Business Outcomes</h3>
+            <button class="panel-close" id="closeOutcomesPanel">×</button>
+        </div>
+        <div class="panel-content">
+            <div class="outcomes-legend" id="outcomesLegend">
+                <!-- Outcomes will be populated here -->
+            </div>
+            <div class="outcomes-filter">
+                <h4>Filter by Outcome</h4>
+                <div id="outcomeFilters">
+                    <!-- Filter checkboxes will be populated here -->
+                </div>
+                <button id="clearFiltersBtn">Clear All Filters</button>
+            </div>
+            <div class="outcomes-stats">
+                <h4>Statistics</h4>
+                <div id="outcomesStats">
+                    <!-- Statistics will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layers Panel -->
+    <div id="layersPanel" class="side-panel">
+        <div class="panel-header">
+            <h3>Layers</h3>
+            <button class="panel-close" id="closeLayersPanel">×</button>
+        </div>
+        <div class="panel-content">
+            <div class="layers-controls">
+                <button id="addLayerBtn">+ Add Layer</button>
+                <button id="deleteLayerBtn">Delete Layer</button>
+            </div>
+            <div class="layers-list" id="layersList">
+                <!-- Layers will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Import BDD Methodology Markdown</h2>
+                <span class="close" id="closeImportModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="import-options">
+                    <div class="import-method">
+                        <h3>Upload Files</h3>
+                        <input type="file" id="fileInput" multiple accept=".md,.txt" />
+                        <p class="help-text">Select bdd_flow.md and bdd_seq.md files</p>
+                    </div>
+                    
+                    <div class="import-method">
+                        <h3>Paste Markdown</h3>
+                        <textarea id="markdownInput" rows="10" placeholder="Paste your BDD markdown here..."></textarea>
+                        <div class="markdown-options">
+                            <label>
+                                <input type="radio" name="diagramType" value="flow" checked>
+                                Flow Diagram
+                            </label>
+                            <label>
+                                <input type="radio" name="diagramType" value="sequence">
+                                Sequence Diagram
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="import-preview" id="importPreview" style="display: none;">
+                    <h3>Import Preview</h3>
+                    <div id="previewContent"></div>
+                </div>
+                
+                <div class="parse-warnings" id="parseWarnings" style="display: none;">
+                    <h3>⚠️ Parse Warnings</h3>
+                    <ul id="warningsList"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="previewImportBtn">Preview</button>
+                <button id="confirmImportBtn" disabled>Import</button>
+                <button id="cancelImportBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Export Options</h2>
+                <span class="close" id="closeExportModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="export-options">
+                    <div class="export-format">
+                        <h3>Format</h3>
+                        <label><input type="radio" name="exportFormat" value="json" checked> JSON (Native)</label>
+                        <label><input type="radio" name="exportFormat" value="markdown"> Methodology MD (Normalized)</label>
+                        <label><input type="radio" name="exportFormat" value="png"> PNG Image</label>
+                        <label><input type="radio" name="exportFormat" value="svg"> SVG Vector</label>
+                    </div>
+                    
+                    <div class="export-settings" id="imageSettings" style="display: none;">
+                        <h3>Image Settings</h3>
+                        <div class="setting-group">
+                            <label>Background:</label>
+                            <select id="exportBackground">
+                                <option value="white">White</option>
+                                <option value="transparent">Transparent</option>
+                                <option value="current">Current Theme</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label>Scale:</label>
+                            <select id="exportScale">
+                                <option value="1">1x (Normal)</option>
+                                <option value="2">2x (High DPI)</option>
+                                <option value="3">3x (Print Quality)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmExportBtn">Export</button>
+                <button id="cancelExportBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata Wizard Modal -->
+    <div id="metadataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Diagram Metadata</h2>
+            </div>
+            <div class="modal-body">
+                <div class="metadata-form">
+                    <div class="form-group">
+                        <label>Flow Title:</label>
+                        <input type="text" id="flowTitle" placeholder="Enter flow title...">
+                    </div>
+                    <div class="form-group">
+                        <label>Methodology:</label>
+                        <select id="methodology">
+                            <option value="BDD">BDD</option>
+                            <option value="TDD">TDD</option>
+                            <option value="DDD">DDD</option>
+                            <option value="SDD">SDD</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Diagram Type:</label>
+                        <select id="diagramType">
+                            <option value="Flowchart">Flowchart</option>
+                            <option value="Sequence">Sequence</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Primary Outcomes:</label>
+                        <textarea id="primaryOutcomes" rows="3" placeholder="Enter outcomes separated by commas..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Timers:</label>
+                        <textarea id="timers" rows="2" placeholder="Enter timers (e.g., Manager Review SLA = 7 days)..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmMetadataBtn">Confirm</button>
+                <button id="skipMetadataBtn">Skip</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="bdd-script-complete.js"></script>
+</body>
+</html>
