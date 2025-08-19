@@ -8,7 +8,130 @@ A minimal, high-performance diagramming web interface (Visio/Lucid/Miro vibe) wi
 - No backend web services required for core features
 - No heavy CSS frameworks or animation bloat
 
+> **Methodology Header Requirement:** The app must display the current methodology title (e.g., **“TDD”**) **fixed at the top-right** of the canvas viewport at all times.
+
+
 ---
+## Static Features (Defaults)
+
+- **Canvas**: Infinite, white bg, grid 10px (snap ON), zoom 25–400%, pan (Space/trackpad)
+- **Toolbar**: Select, Pan, Shapes (Rect, Ellipse, Diamond, Triangle, Text), Connectors (Line, Arrow, Orthogonal), Undo/Redo, Delete, Duplicate
+- **Defaults**: Fill #FFF, Stroke #111827 (2px), Font 14px system-ui, Arrow 8px
+- **Shapes**: Rect 120×72 (r8), Ellipse 120×80, Diamond 120×120, Triangle 120×100, Text "Label"
+- **Connectors**: 8 anchors, snap 8px, solid/dash/dot, arrow/dot/none
+- **Selection**: Resize, rotate, Shift=aspect, Alt=duplicate, multi-select
+- **Properties**: Shape (text, fill, stroke, opacity, radius), Connector (style, markers, label), Canvas (grid/bg)
+- **Layers**: Bring/send, group/ungroup, lock/unlock
+- **Align/Distribute**: L/C/R, T/M/B, h/v spacing
+- **Status Bar**: Zoom %, grid toggle
+- **Shortcuts**: Ctrl+Z/Y, Delete, Ctrl+C/V/D, Arrows=1px, Shift+Arrows=10px, Ctrl±/0 zoom
+
+## Import Button Definition
+
+- **Who clicks**: The user (single-user, local app).  
+- **Where**: Top bar → "Import" button (also Ctrl+I shortcut, or drag-drop onto canvas).  
+- **What happens**: Opens file picker → user selects `.md` file (BDD/DDD/TDD/SDD).  
+- **Source of file**: Local device storage (no external DB, no backend).  
+- **Load process**: App reads `.md` text → parses Methodology + Diagram Type + sections.  
+- **Render**: Parsed content is converted into shapes/connectors → drawn onto the infinite canvas.  
+- **UI result**: The file appears in the Document Switcher with methodology badge + type icon; diagram visible on canvas.  
+
+# Test Suite:  Reload Updated .md File
+
+### T01_ReloadAfterExternalEdit
+**Arrange:** `.md` file updated externally (Mermaid changed A→B → A→C)  
+**Act:** Re-import updated file  
+**Assert:** Canvas shows A→C connection
+
+### T02_ReloadAfterInAppEdit
+**Arrange:** Exported `.md` after editing shape label "Start" → "Login"  
+**Act:** Re-import exported file  
+**Assert:** Canvas displays label "Login"
+
+### T03_ReloadInvalidFile
+**Arrange:** `.md` file missing Diagram Input section  
+**Act:** Re-import file  
+**Assert:** Warning displayed; canvas remains unchanged
+
+
+# Test Suite: Import Business Input File
+
+### T01_SuccessfulImportRendersDiagram
+**Arrange:** Empty canvas; valid `.md` file with Methodology + Diagram Type + required sections  
+**Act:** Click "Import" and select the file  
+**Assert:** File read successfully; diagram rendered on canvas; Document Switcher shows file with badge + icon; header updated to methodology  
+
+### T02_RejectNonMdFiles
+**Arrange:** Empty canvas; select `diagram.txt` file  
+**Act:** Click "Import" and choose invalid file type  
+**Assert:** Error toast "Only .md files are supported"; canvas remains unchanged  
+
+### T03_MissingRequiredSections
+**Arrange:** `.md` file missing `## Diagram Input` or `## Translation`  
+**Act:** Import the file  
+**Assert:** Warning toast "File missing required sections"; diagram not rendered; canvas unchanged  
+
+### T04_HeaderUpdatesOnImport
+**Arrange:** Header initially shows "BDD"; valid `.md` file has Methodology "DDD"  
+**Act:** Import the file  
+**Assert:** Header text updates to "DDD"  
+
+### T05_PreserveCanvasOnFailedImport
+**Arrange:** Canvas contains shapes; attempt to import malformed `.md` file  
+**Act:** Import fails  
+**Assert:** Canvas state remains unchanged; no overwrite occurs  \
+
+# Test Suite: Export Reusable .md File
+
+### T01_ExportIncludesMermaidAndTranslation
+**Arrange:** Canvas contains shapes and connections  
+**Act:** Click "Export (.md)"  
+**Assert:** File generated with `## Diagram Input` (Mermaid) and `## Translation` (human-readable)
+
+### T02_ExportedFileIsReimportable
+**Arrange:** A diagram is exported as `.md`  
+**Act:** Import the same file back into the app  
+**Assert:** Diagram renders identically on canvas
+
+### T03_MetadataPreserved
+**Arrange:** Diagram has Methodology = "BDD", Diagram Type = "Flowchart", Title = "Expense Flow"  
+**Act:** Export as `.md`  
+**Assert:** Front-matter contains Methodology, Diagram Type, and Title fields
+
+### T04_EmptyCanvasExport
+**Arrange:** Empty canvas  
+**Act:** Click "Export (.md)"  
+**Assert:** Warning toast "Nothing to export"; no file downloaded
+
+### T05_ConsistentFormatting
+**Arrange:** Any valid diagram on canvas  
+**Act:** Export as `.md`  
+**Assert:** Sections appear in order → (1) Front-matter, (2) `## Diagram Input` (Mermaid), (3) `## Translation`
+
+### T06_FileNaming
+**Arrange:** Diagram Title = "Expense Flow"  
+**Act:** Export as `.md`  
+**Assert:** Downloaded file name is `expense-flow.md`
+
+# Test Suite — Modify File
+
+### T01_ModifyThroughAppUpdatesMd
+**Arrange:** Imported `.md` file with one shape labeled "Start"  
+**Act:** Edit label in app → "Login"  
+**Assert:** Canvas shows "Login"; exported `.md` file contains "Login"
+
+### T02_ModifyMermaidDirectly
+**Arrange:** `.md` file opened in external editor  
+**Act:** Change Mermaid context from `A-->B` to `A-->C`  
+**Assert:** On re-import, canvas shows A→C connection
+
+### T03_ModifyTranslationDirectly
+**Arrange:** `.md` file with Translation = "Send Email"  
+**Act:** Edit to "Send Report"  
+**Assert:** On re-import, properties/notes display "Send Report"
+
+
+
 
 ## Test Suite: Shapes & Connections
 
