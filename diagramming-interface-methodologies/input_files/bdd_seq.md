@@ -1,7 +1,7 @@
 # BDD — Sequence: E-commerce Checkout
 
 ## Purpose
-Customer confirms checkout; system authorizes payment, reserves stock, confirms order, notifies customer, and creates fulfillment.
+Customer confirms checkout; system authorizes payment, reserves stock, confirms order, notifies customer, and creates fulfillment as a sequence diagram.
 
 ## Participants
 Customer UI, Web App, Order Service, Payment Gateway, Inventory Service, Email Service, Fulfillment Service
