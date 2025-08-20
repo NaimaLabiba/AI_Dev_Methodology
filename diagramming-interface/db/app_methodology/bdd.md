@@ -101,6 +101,10 @@ A minimal, local-first diagramming web app with **auto-rendering workflow**. Foc
 - **Font controls**: Size, weight, alignment options
 - **Text color**: Separate color picker for text content
 
+### Toolbar Placeholders (Future Implementation)
+- **Add Document Button**: Placeholder for adding new documents to workspace
+- **Business Outcomes Panel**: Placeholder for outcome visualization and filtering  
+- **Layers Panel**: Placeholder for element layering and z-index management
 
 
 ### Minimal Shortcuts
