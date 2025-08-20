@@ -32,8 +32,100 @@ A minimal, local-first diagramming web app with **auto-rendering workflow**. Foc
 - **Select**: click, **Shift+click**, **marquee**.  **Delete**: removes shape + attached connectors.  
 - **Text edit**: double-click → inline edit → **Enter** save / **Esc** cancel.
 
+## Canvas Implementation — Sequence Shapes and Annotations
+
+### Sequence Shape Classes
+- **ParticipantShape**: Rectangle with centered text, 118×40px
+- **LifelineShape**: Vertical line extending 500px with connection anchors
+- **MessageShape**: Arrow with label, positioned chronologically
+- **AnnotationShape**: Rounded rectangle for timers and notes
+
+### Drawing Methods
+- **drawParticipant**: Renders participant box with proper styling
+- **drawLifeline**: Creates vertical line with anchor points
+- **drawMessage**: Draws arrow with label positioning
+- **drawAnnotation**: Creates annotation box with dashed connections
+
+### Sequence Element Interactions
+- **Participant selection**: Click to select, drag to reposition
+- **Message editing**: Double-click to edit message text
+- **Lifeline extension**: Automatic height adjustment based on message count
+- **Annotation attachment**: Connect annotations to specific messages or participants
+
+## Feature: Properties Panel — Right-Side Element Management
+
+### Panel Structure
+- **Location**: Fixed right-side panel, 300px width
+- **Sections**: Selection Info, Element Properties, Bulk Actions
+- **Visibility**: Always visible, content changes based on selection
+
+### Bulk Actions
+- **Select All**: Button to select all elements on canvas
+- **Duplicate**: Clone selected elements with 20px offset
+- **Delete**: Remove selected elements and their connections
+- **Clear Selection**: Deselect all elements
+
+### Selection-Based Content
+- **No selection**: Shows canvas statistics (element count, connection count)
+- **Single selection**: Shows element properties (type, label, position, styling)
+- **Multi-selection**: Shows bulk action controls and selection count
+
+### Implementation Details
+- **Select All**: `Ctrl+A` shortcut + button in properties panel
+- **Duplicate**: `Ctrl+D` shortcut + button, creates copies with incremented labels
+- **Delete**: `Delete` key + button, removes elements and updates connections
+- **Selection feedback**: Visual indicators show selected count and types
+
+## Feature: Properties Panel — Shape Style and Layer Management
+
+### Panel Structure
+- **Location**: Right-side panel, collapsible with "Properties" header
+- **Tabs**: Style tab (styling controls) and Content tab (text editing)
+- **Width**: 280px fixed width with responsive controls
+
+### Style Tab Controls
+- **Fill Color**: Color picker with hex/RGB support and color swatches
+- **Border Color**: Color picker matching fill color functionality  
+- **Border Width**: Slider control (1px-10px) with live preview
+- **Opacity**: Slider control (0%-100%) with percentage display
+- **Real-time preview**: Changes apply immediately to selected shapes
+
+### Action Buttons
+- **Delete**: Red button, removes selected shapes and connections
+- **Duplicate**: Creates copy with 20px offset, increments labels
+- **Bring to Front**: Moves shape to top layer (highest z-index)
+- **Send to Back**: Moves shape to bottom layer (lowest z-index)
+
+### Content Tab (when applicable)
+- **Text editing**: Direct text input for shape labels
+- **Font controls**: Size, weight, alignment options
+- **Text color**: Separate color picker for text content
+
+
+
 ### Minimal Shortcuts
 **Ctrl+Z / Ctrl+Y** Undo/Redo · **Delete** Remove · **Space+Drag** Pan · **Ctrl+Wheel** Zoom · **Shift+Resize** Keep aspect
+
+## Feature: Save/Load System — Persistent Diagram Storage
+
+### Save Functionality
+- **Manual Save**: Save button stores current canvas state
+- **Auto-save**: Periodic saving every 30 seconds when changes detected
+- **Save Formats**: JSON format with metadata (title, methodology, elements)
+- **Save Location**: Browser localStorage with export option
+
+### New Diagram Creation
+- **New Button**: Clears canvas and creates blank workspace
+- **Confirmation**: Prompts to save unsaved changes before clearing
+- **Reset State**: Clears all elements, connections, and metadata
+
+## Feature: Enhanced Zoom Controls — Detailed Implementation
+
+### Zoom Specifications  
+- **Zoom Range**: 25% to 400% in 25% increments
+- **Zoom to Cursor**: Centers zoom operation under mouse cursor
+- **Keyboard Shortcuts**: Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset)
+- **Fit Button**: Auto-calculates optimal zoom and center position
 
 ---
 
