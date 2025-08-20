@@ -657,6 +657,7 @@ flowchart LR
   classDef success fill:#e6ffe6,stroke:#0a0,stroke-width:1px,color:#073;
   classDef failure fill:#ffe6e6,stroke:#a00,stroke-width:1px,color:#722;
   classDef neutral fill:#eef3ff,stroke:#3357ff,stroke-width:1px,color:#244;
+  ```
 
 
 #### Human-Readable Export (.md)
@@ -664,14 +665,15 @@ flowchart LR
 - **Sequence format**: Participant interactions with message flow documentation.
 - **Decision documentation**: Clear explanation of branching logic.
 - **Outcome mapping**: Terminal states with business context.
-- **Parity**: Content mirrors the **current canvas state** (round-trip safe).
+- **Parity**: Mirrors the **current canvas state** (round-trip safe).
 
 #### Image Export (PNG/SVG)
 - **Bounds calculation**: Automatic sizing around all elements with **≥ 50px** padding (minimum).
 - **Scale options**: 1×, 2×, 3× (1× ≈ canvas pixels at ~96 DPI).
 - **Background options**: White or transparent (PNG supports transparency).
-- **Vector precision (SVG)**: Maintains infinite scalability; text remains `<text>` elements with proper positioning.
-- **Label fidelity**: **Yes/No branch labels** and other edge labels are rendered in both PNG and SVG.
+- **Vector precision (SVG)**: Infinite scalability; text remains `<text>` with proper positioning; arrowheads are vector paths.
+- **Label fidelity**: **Yes/No branch labels** and other edge labels render in both PNG and SVG.
+
 
 **Scenario: Export format detection and generation**  
 Given a **flowchart** diagram on canvas  
