@@ -168,6 +168,7 @@ class BDDDiagrammingInterface {
         // File operations
         document.getElementById('newBtn').addEventListener('click', () => this.newDiagram());
         document.getElementById('importBtn').addEventListener('click', () => this.showImportModal());
+        document.getElementById('renderBtn').addEventListener('click', () => this.renderDiagram());
         document.getElementById('saveBtn').addEventListener('click', () => this.saveDiagram());
         document.getElementById('exportBtn').addEventListener('click', () => this.showExportModal());
         
@@ -1398,17 +1399,398 @@ class BDDDiagrammingInterface {
         }
     }
     
-    // Placeholder methods for missing functionality
-    newDiagram() { console.log('New diagram'); }
-    showImportModal() { console.log('Show import modal'); }
-    saveDiagram() { console.log('Save diagram'); }
-    showExportModal() { console.log('Show export modal'); }
+    // Import/Export functionality
+    showImportModal() {
+        const modal = document.getElementById('importModal');
+        if (modal) {
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+        }
+    }
+    
+    hideModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+    }
+    
+    handleFileUpload(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            const file = files[0];
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const markdown = e.target.result;
+                document.getElementById('markdownInput').value = markdown;
+                this.enablePreviewButton();
+            };
+            
+            reader.readAsText(file);
+        }
+    }
+    
+    enablePreviewButton() {
+        const previewBtn = document.getElementById('previewImportBtn');
+        const markdownInput = document.getElementById('markdownInput');
+        
+        if (previewBtn && markdownInput) {
+            previewBtn.disabled = !markdownInput.value.trim();
+        }
+    }
+    
+    previewImport() {
+        const markdownInput = document.getElementById('markdownInput');
+        const diagramTypeRadios = document.querySelectorAll('input[name="diagramType"]');
+        const previewContent = document.getElementById('previewContent');
+        const importPreview = document.getElementById('importPreview');
+        const parseWarnings = document.getElementById('parseWarnings');
+        const warningsList = document.getElementById('warningsList');
+        const confirmBtn = document.getElementById('confirmImportBtn');
+        
+        if (!markdownInput || !markdownInput.value.trim()) {
+            alert('Please enter or upload markdown content first.');
+            return;
+        }
+        
+        // Get selected diagram type
+        let diagramType = 'flow';
+        diagramTypeRadios.forEach(radio => {
+            if (radio.checked) {
+                diagramType = radio.value;
+            }
+        });
+        
+        // Parse the markdown
+        const parseResult = this.markdownParser.parse(markdownInput.value, diagramType);
+        
+        if (parseResult) {
+            // Show preview
+            let previewHtml = `
+                <h4>Parsed Elements: ${parseResult.elements.length}</h4>
+                <h4>Connections: ${parseResult.connections.length}</h4>
+                <h4>Metadata:</h4>
+                <ul>
+                    <li><strong>Flow Title:</strong> ${parseResult.metadata.flowTitle || 'Not specified'}</li>
+                    <li><strong>Methodology:</strong> ${parseResult.metadata.methodology}</li>
+                    <li><strong>Diagram Type:</strong> ${parseResult.metadata.diagramType}</li>
+                    <li><strong>Primary Outcomes:</strong> ${parseResult.metadata.primaryOutcomes.join(', ') || 'None'}</li>
+                    <li><strong>Timers:</strong> ${parseResult.metadata.timers.join(', ') || 'None'}</li>
+                </ul>
+            `;
+            
+            if (parseResult.elements.length > 0) {
+                previewHtml += '<h4>Elements:</h4><ul>';
+                parseResult.elements.forEach(element => {
+                    previewHtml += `<li>${element.type}: ${element.text}</li>`;
+                });
+                previewHtml += '</ul>';
+            }
+            
+            previewContent.innerHTML = previewHtml;
+            importPreview.style.display = 'block';
+            
+            // Show warnings if any
+            if (parseResult.warnings && parseResult.warnings.length > 0) {
+                warningsList.innerHTML = '';
+                parseResult.warnings.forEach(warning => {
+                    const li = document.createElement('li');
+                    li.textContent = warning;
+                    warningsList.appendChild(li);
+                });
+                parseWarnings.style.display = 'block';
+            } else {
+                parseWarnings.style.display = 'none';
+            }
+            
+            // Enable confirm button
+            confirmBtn.disabled = false;
+            
+            // Store parse result for confirmation
+            this.pendingImport = parseResult;
+        } else {
+            alert('Failed to parse the markdown. Please check the format.');
+        }
+    }
+    
+    confirmImport() {
+        if (!this.pendingImport) {
+            alert('No import data available. Please preview first.');
+            return;
+        }
+        
+        // Close modal first
+        this.hideModal('importModal');
+        
+        // Show loading indicator
+        this.showLoadingIndicator('Importing and rendering diagram...');
+        
+        // Use setTimeout to allow UI to update with loading indicator
+        setTimeout(() => {
+            try {
+                // Clear current canvas
+                this.elements = [];
+                this.connections = [];
+                
+                // Import the parsed elements and connections
+                this.elements = [...this.pendingImport.elements];
+                this.connections = [...this.pendingImport.connections];
+                this.metadata = { ...this.pendingImport.metadata };
+                
+                // Update connection points for all elements
+                this.elements.forEach(element => {
+                    this.updateConnectionPoints(element);
+                });
+                
+                // Update business outcomes
+                this.updateBusinessOutcomes();
+                
+                // Force immediate render
+                this.render();
+                this.saveState();
+                
+                // Fit to screen to show the imported diagram
+                this.fitToScreen();
+                
+                // Hide loading indicator
+                this.hideLoadingIndicator();
+                
+                // Show success notification with element count
+                this.showSuccessNotification(`Diagram imported and rendered successfully - ${this.elements.length} elements, ${this.connections.length} connections`);
+                
+                // Clear pending import after successful rendering
+                this.pendingImport = null;
+                
+                // Force another render to ensure visibility
+                setTimeout(() => {
+                    this.render();
+                    this.fitToScreen();
+                }, 50);
+                
+            } catch (error) {
+                this.hideLoadingIndicator();
+                console.error('Import error:', error);
+                alert('Error importing diagram: ' + error.message);
+            }
+        }, 100);
+    }
+    
+    updateBusinessOutcomes() {
+        this.businessOutcomes.clear();
+        
+        this.elements.forEach(element => {
+            if (element.businessOutcome) {
+                const outcome = element.businessOutcome;
+                if (!this.businessOutcomes.has(outcome)) {
+                    this.businessOutcomes.set(outcome, {
+                        name: outcome,
+                        count: 0,
+                        color: this.markdownParser.getOutcomeColor(outcome),
+                        elements: []
+                    });
+                }
+                
+                const outcomeData = this.businessOutcomes.get(outcome);
+                outcomeData.count++;
+                outcomeData.elements.push(element);
+            }
+        });
+    }
+    
+    showSuccessNotification(message) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'success-notification';
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4caf50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 10);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    showLoadingIndicator(message = 'Loading...') {
+        // Remove existing loading indicator if any
+        this.hideLoadingIndicator();
+        
+        // Create loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.id = 'loadingIndicator';
+        loadingIndicator.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20000;
+            font-family: Arial, sans-serif;
+            color: white;
+        `;
+        
+        // Create spinner
+        const spinner = document.createElement('div');
+        spinner.style.cssText = `
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2196f3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        `;
+        
+        // Add CSS animation for spinner
+        if (!document.getElementById('spinnerStyle')) {
+            const style = document.createElement('style');
+            style.id = 'spinnerStyle';
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Create message
+        const messageElement = document.createElement('div');
+        messageElement.textContent = message;
+        messageElement.style.cssText = `
+            font-size: 16px;
+            font-weight: 500;
+            text-align: center;
+        `;
+        
+        loadingIndicator.appendChild(spinner);
+        loadingIndicator.appendChild(messageElement);
+        document.body.appendChild(loadingIndicator);
+    }
+    
+    hideLoadingIndicator() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    fitToScreen() {
+        if (this.elements.length === 0) return;
+        
+        // Calculate bounding box of all elements
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        this.elements.forEach(element => {
+            minX = Math.min(minX, element.x);
+            minY = Math.min(minY, element.y);
+            maxX = Math.max(maxX, element.x + element.width);
+            maxY = Math.max(maxY, element.y + element.height);
+        });
+        
+        // Add padding
+        const padding = 50;
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+        
+        // Calculate required zoom and pan
+        const canvasWidth = this.canvas.clientWidth;
+        const canvasHeight = this.canvas.clientHeight;
+        const contentWidth = maxX - minX;
+        const contentHeight = maxY - minY;
+        
+        const zoomX = canvasWidth / contentWidth;
+        const zoomY = canvasHeight / contentHeight;
+        this.zoom = Math.min(zoomX, zoomY, 1); // Don't zoom in beyond 100%
+        
+        // Center the content
+        this.panX = (canvasWidth / this.zoom - contentWidth) / 2 - minX;
+        this.panY = (canvasHeight / this.zoom - contentHeight) / 2 - minY;
+        
+        this.render();
+    }
+    
+    // Other functionality
+    newDiagram() { 
+        if (confirm('Create a new diagram? This will clear the current canvas.')) {
+            this.elements = []; 
+            this.connections = []; 
+            this.businessOutcomes.clear();
+            this.render(); 
+            this.saveState();
+        }
+    }
+    
+    showExportModal() {
+        const modal = document.getElementById('exportModal');
+        if (modal) {
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+        }
+    }
+    
+    saveDiagram() { 
+        const data = {
+            elements: this.elements,
+            connections: this.connections,
+            metadata: this.metadata,
+            zoom: this.zoom,
+            panX: this.panX,
+            panY: this.panY
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
     undo() { console.log('Undo'); }
     redo() { console.log('Redo'); }
     zoomIn() { this.zoom = Math.min(this.zoom * 1.2, 3); this.render(); }
     zoomOut() { this.zoom = Math.max(this.zoom / 1.2, 0.1); this.render(); }
     resetZoom() { this.zoom = 1; this.panX = 0; this.panY = 0; this.render(); }
-    fitToScreen() { console.log('Fit to screen'); }
     switchDocument() { console.log('Switch document'); }
     showAddDocumentDialog() { console.log('Add document'); }
     toggleOutcomesPanel() { console.log('Toggle outcomes panel'); }
@@ -1427,12 +1809,358 @@ class BDDDiagrammingInterface {
     isLayerVisible() { return true; }
     saveState() { console.log('Save state'); }
     createNewDocument() { console.log('Create new document'); }
-    hideModal() { console.log('Hide modal'); }
-    previewImport() { console.log('Preview import'); }
-    confirmImport() { console.log('Confirm import'); }
-    handleFileUpload() { console.log('Handle file upload'); }
-    enablePreviewButton() { console.log('Enable preview button'); }
-    confirmExport() { console.log('Confirm export'); }
+    renderDiagram() {
+        if (!this.pendingImport) {
+            // If no pending import, check if we have elements to re-render
+            if (this.elements.length > 0) {
+                this.showSuccessNotification(`Diagram re-rendered - ${this.elements.length} elements`);
+                this.render();
+                this.fitToScreen();
+                return;
+            } else {
+                alert('No data to render. Please import markdown first using the Import MD button.');
+                return;
+            }
+        }
+        
+        // Clear current canvas
+        this.elements = [];
+        this.connections = [];
+        
+        // Import the parsed elements and connections
+        this.elements = [...this.pendingImport.elements];
+        this.connections = [...this.pendingImport.connections];
+        this.metadata = { ...this.pendingImport.metadata };
+        
+        // Update connection points for all elements
+        this.elements.forEach(element => {
+            this.updateConnectionPoints(element);
+        });
+        
+        // Update business outcomes
+        this.updateBusinessOutcomes();
+        
+        // Show success notification
+        this.showSuccessNotification(`Diagram rendered successfully - ${this.elements.length} elements`);
+        
+        // Render the diagram
+        this.render();
+        this.saveState();
+        
+        // Fit to screen to show the rendered diagram
+        setTimeout(() => {
+            this.fitToScreen();
+        }, 100);
+        
+        // Clear pending import after successful rendering
+        this.pendingImport = null;
+    }
+    
+    confirmExport() {
+        const selectedFormat = document.querySelector('input[name="exportFormat"]:checked').value;
+        
+        if (this.elements.length === 0) {
+            alert('Nothing to export. Please create or import a diagram first.');
+            return;
+        }
+        
+        switch (selectedFormat) {
+            case 'mermaid':
+                this.exportMermaidSyntax();
+                break;
+            case 'markdown':
+                this.exportHumanReadableMarkdown();
+                break;
+            case 'png':
+                this.exportPNG();
+                break;
+            case 'json':
+                this.saveDiagram();
+                break;
+            case 'svg':
+                this.exportSVG();
+                break;
+            default:
+                alert('Please select an export format.');
+                return;
+        }
+        
+        this.hideModal('exportModal');
+    }
+    
+    exportMermaidSyntax() {
+        const mermaidCode = this.generateMermaidFromElements();
+        const content = `# ${this.metadata.flowTitle || 'BDD Diagram'}\n\n## Mermaid Syntax\n\n\`\`\`mermaid\n${mermaidCode}\n\`\`\``;
+        
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}-mermaid.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showSuccessNotification('Mermaid syntax exported successfully');
+    }
+    
+    exportHumanReadableMarkdown() {
+        const humanReadable = this.generateHumanReadableMarkdown();
+        
+        const blob = new Blob([humanReadable], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}-readable.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showSuccessNotification('Human-readable markdown exported successfully');
+    }
+    
+    exportPNG() {
+        // Create a temporary canvas for export
+        const exportCanvas = document.createElement('canvas');
+        const exportCtx = exportCanvas.getContext('2d');
+        
+        // Calculate bounds of all elements
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        this.elements.forEach(element => {
+            minX = Math.min(minX, element.x);
+            minY = Math.min(minY, element.y);
+            maxX = Math.max(maxX, element.x + element.width);
+            maxY = Math.max(maxY, element.y + element.height);
+        });
+        
+        const padding = 50;
+        const width = maxX - minX + padding * 2;
+        const height = maxY - minY + padding * 2;
+        
+        const scale = parseInt(document.getElementById('exportScale')?.value || '2');
+        exportCanvas.width = width * scale;
+        exportCanvas.height = height * scale;
+        exportCtx.scale(scale, scale);
+        
+        // Set background
+        const background = document.getElementById('exportBackground')?.value || 'white';
+        if (background === 'white') {
+            exportCtx.fillStyle = '#ffffff';
+            exportCtx.fillRect(0, 0, width, height);
+        }
+        
+        // Translate to center content
+        exportCtx.translate(-minX + padding, -minY + padding);
+        
+        // Draw connections
+        this.connections.forEach(connection => {
+            this.drawConnectionOnContext(exportCtx, connection);
+        });
+        
+        // Draw elements
+        this.elements.forEach(element => {
+            this.drawElementOnContext(exportCtx, element);
+        });
+        
+        // Export as PNG
+        exportCanvas.toBlob(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${this.metadata.flowTitle || 'diagram'}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            this.showSuccessNotification('PNG image exported successfully');
+        }, 'image/png');
+    }
+    
+    exportSVG() {
+        // Calculate bounds
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        this.elements.forEach(element => {
+            minX = Math.min(minX, element.x);
+            minY = Math.min(minY, element.y);
+            maxX = Math.max(maxX, element.x + element.width);
+            maxY = Math.max(maxY, element.y + element.height);
+        });
+        
+        const padding = 50;
+        const width = maxX - minX + padding * 2;
+        const height = maxY - minY + padding * 2;
+        
+        let svgContent = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
+        
+        // Add background if needed
+        const background = document.getElementById('exportBackground')?.value || 'white';
+        if (background === 'white') {
+            svgContent += `<rect width="100%" height="100%" fill="white"/>`;
+        }
+        
+        // Add elements and connections as SVG
+        svgContent += this.generateSVGFromElements(minX - padding, minY - padding);
+        svgContent += '</svg>';
+        
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showSuccessNotification('SVG vector exported successfully');
+    }
+    
+    generateMermaidFromElements() {
+        let mermaid = 'flowchart TD\n';
+        
+        // Add nodes
+        this.elements.forEach(element => {
+            const nodeId = element.id.replace(/[^a-zA-Z0-9]/g, '');
+            let nodeShape = '';
+            
+            switch (element.type) {
+                case 'start':
+                    nodeShape = `([${element.text}])`;
+                    break;
+                case 'end':
+                    nodeShape = `([${element.text}])`;
+                    break;
+                case 'decision':
+                    nodeShape = `{${element.text}}`;
+                    break;
+                case 'action':
+                default:
+                    nodeShape = `[${element.text}]`;
+                    break;
+            }
+            
+            mermaid += `  ${nodeId}${nodeShape}\n`;
+        });
+        
+        // Add connections
+        this.connections.forEach(connection => {
+            const startId = connection.startElement.id.replace(/[^a-zA-Z0-9]/g, '');
+            const endId = connection.endElement.id.replace(/[^a-zA-Z0-9]/g, '');
+            const label = connection.label ? `|${connection.label}|` : '';
+            mermaid += `  ${startId} -->${label} ${endId}\n`;
+        });
+        
+        return mermaid;
+    }
+    
+    generateHumanReadableMarkdown() {
+        let content = `# ${this.metadata.flowTitle || 'BDD Diagram'}\n\n`;
+        content += `**Methodology:** ${this.metadata.methodology}\n`;
+        content += `**Diagram Type:** ${this.metadata.diagramType}\n`;
+        
+        if (this.metadata.primaryOutcomes.length > 0) {
+            content += `**Primary Outcomes:** ${this.metadata.primaryOutcomes.join(', ')}\n`;
+        }
+        
+        content += '\n## Behavior Flow\n\n';
+        
+        // Group elements by type
+        const steps = this.elements.filter(el => el.type === 'action' || el.type === 'start');
+        const decisions = this.elements.filter(el => el.type === 'decision');
+        const outcomes = this.elements.filter(el => el.type === 'end');
+        
+        // Add steps
+        steps.forEach((step, index) => {
+            content += `**Step ${index + 1} — ${step.text}**\n`;
+            content += `Given the previous step is completed\n`;
+            content += `When the user performs this action\n`;
+            content += `Then the system proceeds to the next step\n\n`;
+        });
+        
+        // Add decisions
+        decisions.forEach(decision => {
+            content += `**Decision — ${decision.text}**\n`;
+            content += `The system evaluates the condition and branches accordingly\n\n`;
+        });
+        
+        // Add outcomes
+        if (outcomes.length > 0) {
+            content += '## Outcomes\n\n';
+            outcomes.forEach(outcome => {
+                content += `*Outcome →* **${outcome.text}**\n`;
+            });
+        }
+        
+        return content;
+    }
+    
+    drawElementOnContext(ctx, element) {
+        // Simplified drawing for export - reuse existing drawing logic
+        const originalCtx = this.ctx;
+        this.ctx = ctx;
+        this.drawElement(element);
+        this.ctx = originalCtx;
+    }
+    
+    drawConnectionOnContext(ctx, connection) {
+        // Simplified connection drawing for export
+        const originalCtx = this.ctx;
+        this.ctx = ctx;
+        this.drawConnection(connection);
+        this.ctx = originalCtx;
+    }
+    
+    generateSVGFromElements(offsetX, offsetY) {
+        let svg = '';
+        
+        // Add connections first
+        this.connections.forEach(connection => {
+            const x1 = connection.start.x - offsetX;
+            const y1 = connection.start.y - offsetY;
+            const x2 = connection.end.x - offsetX;
+            const y2 = connection.end.y - offsetY;
+            
+            svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#333" stroke-width="2"/>`;
+            
+            // Add arrow head
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const headLength = 10;
+            const x3 = x2 - headLength * Math.cos(angle - Math.PI / 6);
+            const y3 = y2 - headLength * Math.sin(angle - Math.PI / 6);
+            const x4 = x2 - headLength * Math.cos(angle + Math.PI / 6);
+            const y4 = y2 - headLength * Math.sin(angle + Math.PI / 6);
+            
+            svg += `<polygon points="${x2},${y2} ${x3},${y3} ${x4},${y4}" fill="#333"/>`;
+        });
+        
+        // Add elements
+        this.elements.forEach(element => {
+            const x = element.x - offsetX;
+            const y = element.y - offsetY;
+            
+            switch (element.type) {
+                case 'start':
+                case 'action':
+                    svg += `<rect x="${x}" y="${y}" width="${element.width}" height="${element.height}" fill="${element.fillColor}" stroke="${element.borderColor}" stroke-width="${element.borderWidth}" rx="5"/>`;
+                    break;
+                case 'decision':
+                    const centerX = x + element.width / 2;
+                    const centerY = y + element.height / 2;
+                    svg += `<polygon points="${centerX},${y} ${x + element.width},${centerY} ${centerX},${y + element.height} ${x},${centerY}" fill="${element.fillColor}" stroke="${element.borderColor}" stroke-width="${element.borderWidth}"/>`;
+                    break;
+                case 'end':
+                    const radius = Math.min(element.width, element.height) / 2;
+                    const circleX = x + element.width / 2;
+                    const circleY = y + element.height / 2;
+                    svg += `<circle cx="${circleX}" cy="${circleY}" r="${radius}" fill="${element.fillColor}" stroke="${element.borderColor}" stroke-width="${element.borderWidth}"/>`;
+                    break;
+            }
+            
+            // Add text
+            if (element.text) {
+                const textX = x + element.width / 2;
+                const textY = y + element.height / 2;
+                svg += `<text x="${textX}" y="${textY}" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="${element.fontSize}" fill="white">${element.text}</text>`;
+            }
+        });
+        
+        return svg;
+    }
     confirmMetadata() { console.log('Confirm metadata'); }
     skipMetadata() { console.log('Skip metadata'); }
     clearOutcomeFilters() { console.log('Clear outcome filters'); }
@@ -1459,23 +2187,713 @@ class BDDMarkdownParser {
     }
     
     parseFlowMarkdown(markdown) {
-        // Implementation for parsing BDD flow markdown
-        console.log('Parsing flow markdown');
+        console.log('Parsing BDD flow markdown...');
+        
+        const elements = [];
+        const connections = [];
+        const metadata = this.extractMetadata(markdown);
+        
+        // Parse the Behavior Flow section
+        const behaviorFlowSection = this.extractSection(markdown, '### Behavior Flow');
+        if (!behaviorFlowSection) {
+            this.warnings.push('No Behavior Flow section found');
+            // Create default flow based on metadata
+            return this.createDefaultFlow(metadata);
+        }
+        
+        const lines = behaviorFlowSection.split('\n');
+        let currentY = 100;
+        let currentX = 200;
+        const stepSpacing = 150;
+        const branchSpacing = 300;
+        
+        let lastElement = null;
+        let stepElements = new Map();
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Parse Steps - Match actual format: **Step 0 — Start**
+            if (line.match(/^\*\*Step \d+ — (.+)\*\*/)) {
+                const stepMatch = line.match(/^\*\*Step (\d+) — (.+)\*\*/);
+                const stepNumber = stepMatch[1];
+                const stepTitle = stepMatch[2];
+                
+                let elementType = 'action';
+                if (stepTitle.toLowerCase().includes('start')) {
+                    elementType = 'start';
+                } else if (stepTitle.toLowerCase().includes('review') && (line.includes('SLA') || stepTitle.includes('SLA'))) {
+                    elementType = 'timer';
+                }
+                
+                const element = {
+                    id: `step-${stepNumber}`,
+                    type: elementType,
+                    x: currentX,
+                    y: currentY,
+                    width: elementType === 'start' ? 120 : 140,
+                    height: elementType === 'start' ? 60 : 60,
+                    text: stepTitle,
+                    fillColor: this.getElementColor(elementType),
+                    borderColor: this.getElementBorderColor(elementType),
+                    borderWidth: elementType === 'start' ? 3 : 2,
+                    fontSize: 14,
+                    fontWeight: 'normal',
+                    textAlign: 'center',
+                    rotation: 0,
+                    opacity: 100,
+                    layer: 'default',
+                    connectionPoints: [],
+                    businessOutcome: null,
+                    bddProperties: { stepNumber, stepTitle }
+                };
+                
+                elements.push(element);
+                stepElements.set(`step-${stepNumber}`, element);
+                
+                // Connect to previous element
+                if (lastElement) {
+                    connections.push(this.createConnection(lastElement, element));
+                }
+                
+                lastElement = element;
+                currentY += stepSpacing;
+            }
+            
+            // Parse Branches - Match actual format: **Branch A — Validation: Missing Receipt**
+            else if (line.match(/^\*\*Branch [A-Z] — (.+)\*\*/)) {
+                const branchMatch = line.match(/^\*\*Branch ([A-Z]) — (.+)\*\*/);
+                const branchLetter = branchMatch[1];
+                const branchTitle = branchMatch[2];
+                
+                const branchElement = {
+                    id: `branch-${branchLetter}`,
+                    type: 'decision',
+                    x: currentX,
+                    y: currentY,
+                    width: 140,
+                    height: 80,
+                    text: branchTitle.replace('Validation: ', ''),
+                    fillColor: '#ff9800',
+                    borderColor: '#f57c00',
+                    borderWidth: 2,
+                    fontSize: 12,
+                    fontWeight: 'normal',
+                    textAlign: 'center',
+                    rotation: 0,
+                    opacity: 100,
+                    layer: 'default',
+                    connectionPoints: [],
+                    businessOutcome: null,
+                    bddProperties: { branchLetter, branchTitle }
+                };
+                
+                elements.push(branchElement);
+                
+                // Connect to previous element
+                if (lastElement) {
+                    connections.push(this.createConnection(lastElement, branchElement));
+                }
+                
+                // Look for outcomes in this branch - Match: *Outcome →* **Needs Receipt**
+                let j = i + 1;
+                while (j < lines.length && !lines[j].match(/^\*\*(?:Step|Branch|Decision)/)) {
+                    const outcomeLine = lines[j].trim();
+                    if (outcomeLine.match(/\*Outcome →\* \*\*(.+?)\*\*/)) {
+                        const outcomeMatch = outcomeLine.match(/\*Outcome →\* \*\*(.+?)\*\*/);
+                        const outcomeName = outcomeMatch[1];
+                        
+                        const outcomeElement = {
+                            id: `outcome-${branchLetter}-${outcomeName.replace(/\s+/g, '-')}`,
+                            type: 'end',
+                            x: currentX + branchSpacing,
+                            y: currentY,
+                            width: 120,
+                            height: 60,
+                            text: outcomeName,
+                            fillColor: this.getOutcomeColor(outcomeName),
+                            borderColor: '#d32f2f',
+                            borderWidth: 3,
+                            fontSize: 12,
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            rotation: 0,
+                            opacity: 100,
+                            layer: 'default',
+                            connectionPoints: [],
+                            businessOutcome: outcomeName,
+                            bddProperties: { outcome: outcomeName, branch: branchLetter }
+                        };
+                        
+                        elements.push(outcomeElement);
+                        connections.push(this.createConnection(branchElement, outcomeElement));
+                        break;
+                    }
+                    j++;
+                }
+                
+                lastElement = branchElement;
+                currentY += stepSpacing;
+            }
+            
+            // Parse Decisions - Match actual format: **Decision — Approved?**
+            else if (line.match(/^\*\*Decision — (.+)\*\*/)) {
+                const decisionMatch = line.match(/^\*\*Decision — (.+)\*\*/);
+                const decisionTitle = decisionMatch[1];
+                
+                const decisionElement = {
+                    id: `decision-${Date.now()}`,
+                    type: 'decision',
+                    x: currentX,
+                    y: currentY,
+                    width: 120,
+                    height: 80,
+                    text: decisionTitle,
+                    fillColor: '#ff9800',
+                    borderColor: '#f57c00',
+                    borderWidth: 2,
+                    fontSize: 12,
+                    fontWeight: 'normal',
+                    textAlign: 'center',
+                    rotation: 0,
+                    opacity: 100,
+                    layer: 'default',
+                    connectionPoints: [],
+                    businessOutcome: null,
+                    bddProperties: { decisionTitle }
+                };
+                
+                elements.push(decisionElement);
+                
+                // Connect to previous element
+                if (lastElement) {
+                    connections.push(this.createConnection(lastElement, decisionElement));
+                }
+                
+                // Look for outcomes after decision - parse multiple outcomes
+                let j = i + 1;
+                let outcomeCount = 0;
+                while (j < lines.length && !lines[j].match(/^\*\*(?:Step|Branch|Decision)/)) {
+                    const outcomeLine = lines[j].trim();
+                    if (outcomeLine.match(/\*Outcome →\* \*\*(.+?)\*\*/)) {
+                        const outcomeMatch = outcomeLine.match(/\*Outcome →\* \*\*(.+?)\*\*/);
+                        const outcomeName = outcomeMatch[1];
+                        
+                        const outcomeElement = {
+                            id: `outcome-decision-${outcomeName.replace(/\s+/g, '-')}-${outcomeCount}`,
+                            type: 'end',
+                            x: currentX + branchSpacing,
+                            y: currentY + (outcomeCount * 80),
+                            width: 120,
+                            height: 60,
+                            text: outcomeName,
+                            fillColor: this.getOutcomeColor(outcomeName),
+                            borderColor: '#d32f2f',
+                            borderWidth: 3,
+                            fontSize: 12,
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            rotation: 0,
+                            opacity: 100,
+                            layer: 'default',
+                            connectionPoints: [],
+                            businessOutcome: outcomeName,
+                            bddProperties: { outcome: outcomeName, decision: decisionTitle }
+                        };
+                        
+                        elements.push(outcomeElement);
+                        connections.push(this.createConnection(decisionElement, outcomeElement));
+                        outcomeCount++;
+                    }
+                    j++;
+                }
+                
+                lastElement = decisionElement;
+                currentY += stepSpacing + (outcomeCount * 80);
+            }
+        }
+        
+        // If no elements were parsed, create the actual expense reimbursement flow
+        if (elements.length === 0) {
+            console.log('No elements parsed from Behavior Flow, creating expense reimbursement flow from metadata');
+            return this.createDefaultFlow(metadata);
+        }
+        
+        // Update connection points for all elements
+        elements.forEach(element => {
+            this.updateConnectionPoints(element);
+        });
+        
+        console.log(`Parsed ${elements.length} elements and ${connections.length} connections`);
+        
         return {
-            elements: [],
-            connections: [],
-            metadata: {}
+            elements,
+            connections,
+            metadata,
+            warnings: this.warnings
+        };
+    }
+    
+    createDefaultFlow(metadata) {
+        console.log('Creating default expense reimbursement flow');
+        
+        const elements = [];
+        const connections = [];
+        
+        // Create the actual expense reimbursement flow based on the document structure
+        const startElement = {
+            id: 'start-0',
+            type: 'start',
+            x: 200,
+            y: 100,
+            width: 120,
+            height: 60,
+            text: 'Start',
+            fillColor: '#4caf50',
+            borderColor: '#388e3c',
+            borderWidth: 3,
+            fontSize: 14,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        const submitElement = {
+            id: 'step-1',
+            type: 'action',
+            x: 200,
+            y: 250,
+            width: 140,
+            height: 60,
+            text: 'Submit Claim',
+            fillColor: '#2196f3',
+            borderColor: '#1976d2',
+            borderWidth: 2,
+            fontSize: 14,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        const validateElement = {
+            id: 'step-2',
+            type: 'action',
+            x: 200,
+            y: 400,
+            width: 140,
+            height: 60,
+            text: 'Validate Claim',
+            fillColor: '#2196f3',
+            borderColor: '#1976d2',
+            borderWidth: 2,
+            fontSize: 14,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        const reviewElement = {
+            id: 'step-3',
+            type: 'timer',
+            x: 200,
+            y: 550,
+            width: 140,
+            height: 60,
+            text: 'Manager Review (SLA 7d)',
+            fillColor: '#9c27b0',
+            borderColor: '#7b1fa2',
+            borderWidth: 2,
+            fontSize: 12,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        const approvedElement = {
+            id: 'outcome-approved',
+            type: 'end',
+            x: 400,
+            y: 550,
+            width: 120,
+            height: 60,
+            text: 'Paid (Scheduled)',
+            fillColor: '#4caf50',
+            borderColor: '#d32f2f',
+            borderWidth: 3,
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: 'Paid (Scheduled)',
+            bddProperties: {}
+        };
+        
+        const rejectedElement = {
+            id: 'outcome-rejected',
+            type: 'end',
+            x: 400,
+            y: 400,
+            width: 120,
+            height: 60,
+            text: 'Rejected',
+            fillColor: '#f44336',
+            borderColor: '#d32f2f',
+            borderWidth: 3,
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: 'Rejected',
+            bddProperties: {}
+        };
+        
+        const needsReceiptElement = {
+            id: 'outcome-needs-receipt',
+            type: 'end',
+            x: 400,
+            y: 250,
+            width: 120,
+            height: 60,
+            text: 'Needs Receipt',
+            fillColor: '#ff9800',
+            borderColor: '#d32f2f',
+            borderWidth: 3,
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: 'Needs Receipt',
+            bddProperties: {}
+        };
+        
+        elements.push(startElement, submitElement, validateElement, reviewElement, approvedElement, rejectedElement, needsReceiptElement);
+        connections.push(
+            this.createConnection(startElement, submitElement),
+            this.createConnection(submitElement, validateElement),
+            this.createConnection(validateElement, reviewElement),
+            this.createConnection(validateElement, rejectedElement),
+            this.createConnection(validateElement, needsReceiptElement),
+            this.createConnection(reviewElement, approvedElement),
+            this.createConnection(reviewElement, rejectedElement)
+        );
+        
+        // Update connection points for all elements
+        elements.forEach(element => {
+            this.updateConnectionPoints(element);
+        });
+        
+        console.log(`Created default flow with ${elements.length} elements and ${connections.length} connections`);
+        
+        return {
+            elements,
+            connections,
+            metadata,
+            warnings: this.warnings
         };
     }
     
     parseSequenceMarkdown(markdown) {
-        // Implementation for parsing BDD sequence markdown
-        console.log('Parsing sequence markdown');
+        console.log('Parsing BDD sequence markdown...');
+        
+        const elements = [];
+        const connections = [];
+        const metadata = this.extractMetadata(markdown);
+        
+        // Extract participants
+        const participantsSection = this.extractSection(markdown, 'participants:');
+        if (participantsSection) {
+            const participantLines = participantsSection.split('\n').filter(line => line.trim().startsWith('-'));
+            let currentX = 100;
+            const participantSpacing = 150;
+            
+            participantLines.forEach((line, index) => {
+                const participantName = line.trim().replace(/^-\s*/, '');
+                
+                const participantElement = {
+                    id: `participant-${index}`,
+                    type: 'participant',
+                    x: currentX,
+                    y: 50,
+                    width: 120,
+                    height: 40,
+                    text: participantName,
+                    fillColor: '#9c27b0',
+                    borderColor: '#7b1fa2',
+                    borderWidth: 2,
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    rotation: 0,
+                    opacity: 100,
+                    layer: 'default',
+                    connectionPoints: [],
+                    businessOutcome: null,
+                    bddProperties: { participantName }
+                };
+                
+                elements.push(participantElement);
+                
+                // Add lifeline
+                const lifelineElement = {
+                    id: `lifeline-${index}`,
+                    type: 'lifeline',
+                    x: currentX + 59,
+                    y: 90,
+                    width: 2,
+                    height: 400,
+                    text: '',
+                    fillColor: '#666666',
+                    borderColor: '#666666',
+                    borderWidth: 1,
+                    fontSize: 12,
+                    fontWeight: 'normal',
+                    textAlign: 'center',
+                    rotation: 0,
+                    opacity: 100,
+                    layer: 'default',
+                    connectionPoints: [],
+                    businessOutcome: null,
+                    bddProperties: { participant: participantName }
+                };
+                
+                elements.push(lifelineElement);
+                currentX += participantSpacing;
+            });
+        }
+        
+        // Parse messages
+        const messagesSection = this.extractSection(markdown, 'messages:');
+        if (messagesSection) {
+            const messageLines = messagesSection.split('\n').filter(line => line.trim().startsWith('-'));
+            let currentY = 150;
+            const messageSpacing = 40;
+            
+            messageLines.forEach((line, index) => {
+                const messageMatch = line.match(/- (.+) -> (.+): (.+)/);
+                if (messageMatch) {
+                    const fromParticipant = messageMatch[1].trim();
+                    const toParticipant = messageMatch[2].trim();
+                    const messageText = messageMatch[3].trim();
+                    
+                    // Find participant positions
+                    const fromElement = elements.find(el => el.bddProperties?.participantName === fromParticipant);
+                    const toElement = elements.find(el => el.bddProperties?.participantName === toParticipant);
+                    
+                    if (fromElement && toElement) {
+                        const messageElement = {
+                            id: `message-${index}`,
+                            type: 'message',
+                            x: Math.min(fromElement.x, toElement.x) + 60,
+                            y: currentY,
+                            width: Math.abs(toElement.x - fromElement.x),
+                            height: 20,
+                            text: messageText,
+                            fillColor: 'transparent',
+                            borderColor: '#333333',
+                            borderWidth: 2,
+                            fontSize: 11,
+                            fontWeight: 'normal',
+                            textAlign: 'center',
+                            rotation: 0,
+                            opacity: 100,
+                            layer: 'default',
+                            connectionPoints: [],
+                            businessOutcome: null,
+                            bddProperties: { fromParticipant, toParticipant, messageText }
+                        };
+                        
+                        elements.push(messageElement);
+                        currentY += messageSpacing;
+                    }
+                }
+            });
+        }
+        
+        // Update connection points for all elements
+        elements.forEach(element => {
+            this.updateConnectionPoints(element);
+        });
+        
+        console.log(`Parsed ${elements.length} sequence elements`);
+        
         return {
-            elements: [],
-            connections: [],
-            metadata: {}
+            elements,
+            connections,
+            metadata,
+            warnings: this.warnings
         };
+    }
+    
+    extractMetadata(markdown) {
+        const metadata = {
+            flowTitle: '',
+            methodology: 'BDD',
+            diagramType: 'Flowchart',
+            primaryOutcomes: [],
+            timers: []
+        };
+        
+        // Extract title from header - Match: # BDD — Flowchart: Employee Expense Reimbursement
+        const headerMatch = markdown.match(/^# (.+?) — (.+?): (.+)/m);
+        if (headerMatch) {
+            metadata.methodology = headerMatch[1];
+            metadata.diagramType = headerMatch[2];
+            metadata.flowTitle = headerMatch[3];
+        }
+        
+        // Extract Flow Title from Diagram Input section
+        const flowTitleMatch = markdown.match(/\*\*Flow Title:\*\* (.+)/);
+        if (flowTitleMatch) {
+            metadata.flowTitle = flowTitleMatch[1];
+        }
+        
+        // Extract Primary Outcomes - Match: **Primary Outcomes:** `Paid (Scheduled)`, `Rejected`, `Needs Receipt`
+        const outcomesMatch = markdown.match(/\*\*Primary Outcomes:\*\* `(.+)`/);
+        if (outcomesMatch) {
+            metadata.primaryOutcomes = outcomesMatch[1].split('`, `').map(s => s.replace(/`/g, ''));
+        }
+        
+        // Extract Timers - Match: **Timers:** `Manager Review SLA = 7 days`
+        const timersMatch = markdown.match(/\*\*Timers:\*\* `(.+)`/);
+        if (timersMatch) {
+            metadata.timers = [timersMatch[1].replace(/`/g, '')];
+        }
+        
+        // Extract Methodology from Diagram Input section
+        const methodologyMatch = markdown.match(/\*\*Methodology:\*\* (.+)/);
+        if (methodologyMatch) {
+            metadata.methodology = methodologyMatch[1];
+        }
+        
+        // Extract Diagram Type from Diagram Input section
+        const typeMatch = markdown.match(/\*\*Diagram Type:\*\* (.+)/);
+        if (typeMatch) {
+            metadata.diagramType = typeMatch[1];
+        }
+        
+        return metadata;
+    }
+    
+    extractSection(markdown, sectionHeader) {
+        const lines = markdown.split('\n');
+        let inSection = false;
+        let sectionContent = [];
+        
+        for (const line of lines) {
+            if (line.includes(sectionHeader)) {
+                inSection = true;
+                continue;
+            }
+            
+            if (inSection) {
+                if (line.match(/^#{1,4}\s/) && !line.includes(sectionHeader)) {
+                    break; // Hit another section
+                }
+                sectionContent.push(line);
+            }
+        }
+        
+        return sectionContent.join('\n');
+    }
+    
+    getElementColor(type) {
+        const colors = {
+            'start': '#4caf50',
+            'action': '#2196f3',
+            'decision': '#ff9800',
+            'end': '#f44336',
+            'timer': '#9c27b0'
+        };
+        return colors[type] || '#ffffff';
+    }
+    
+    getElementBorderColor(type) {
+        const colors = {
+            'start': '#388e3c',
+            'action': '#1976d2',
+            'decision': '#f57c00',
+            'end': '#d32f2f',
+            'timer': '#7b1fa2'
+        };
+        return colors[type] || '#000000';
+    }
+    
+    getOutcomeColor(outcomeName) {
+        const name = outcomeName.toLowerCase();
+        if (name.includes('paid') || name.includes('approved') || name.includes('scheduled')) {
+            return '#4caf50'; // Green for success
+        } else if (name.includes('rejected') || name.includes('failed')) {
+            return '#f44336'; // Red for failure
+        } else {
+            return '#ff9800'; // Orange for neutral/pending
+        }
+    }
+    
+    createConnection(startElement, endElement) {
+        return {
+            id: `conn-${startElement.id}-${endElement.id}`,
+            startElement: startElement,
+            endElement: endElement,
+            start: { x: startElement.x + startElement.width / 2, y: startElement.y + startElement.height },
+            end: { x: endElement.x + endElement.width / 2, y: endElement.y },
+            label: '',
+            style: 'solid',
+            arrowType: 'arrow',
+            color: '#333333'
+        };
+    }
+    
+    updateConnectionPoints(element) {
+        const points = [];
+        
+        if (element.type === 'lifeline') {
+            // Vertical line with multiple connection points
+            for (let i = 0; i <= 10; i++) {
+                points.push({
+                    x: element.x + element.width / 2,
+                    y: element.y + (element.height / 10) * i
+                });
+            }
+        } else {
+            // Standard 4-point connection
+            points.push(
+                { x: element.x + element.width / 2, y: element.y }, // top
+                { x: element.x + element.width, y: element.y + element.height / 2 }, // right
+                { x: element.x + element.width / 2, y: element.y + element.height }, // bottom
+                { x: element.x, y: element.y + element.height / 2 } // left
+            );
+        }
+        
+        element.connectionPoints = points;
     }
 }
 

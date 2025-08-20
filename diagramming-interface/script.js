@@ -1,41 +1,91 @@
-class DiagrammingInterface {
+// BDD Diagramming Interface - Complete Implementation
+class BDDDiagrammingApp {
     constructor() {
         this.canvas = document.getElementById('diagramCanvas');
         this.ctx = this.canvas.getContext('2d');
-        this.canvasOverlay = document.getElementById('canvasOverlay');
+        this.canvasWrapper = document.querySelector('.canvas-wrapper');
+        
+        // Canvas settings - 6000x4000 finite stage
+        this.canvasWidth = 6000;
+        this.canvasHeight = 4000;
+        this.canvas.width = this.canvasWidth;
+        this.canvas.height = this.canvasHeight;
         
         // State management
         this.elements = [];
         this.connections = [];
-        this.selectedElement = null;
-        this.draggedElement = null;
+        this.selectedElements = [];
+        this.currentTool = 'select';
         this.isDrawing = false;
         this.isDragging = false;
         this.isConnecting = false;
-        this.connectionStart = null;
-        this.connectionEnd = null;
+        this.isPanning = false;
         this.isResizing = false;
-        this.resizeHandle = null;
+        
+        // View state
         this.zoom = 1;
         this.panX = 0;
         this.panY = 0;
-        
-        // History for undo/redo
-        this.history = [];
-        this.historyIndex = -1;
+        this.viewportWidth = 0;
+        this.viewportHeight = 0;
         
         // Mouse state
         this.mouseX = 0;
         this.mouseY = 0;
         this.lastMouseX = 0;
         this.lastMouseY = 0;
-        this.isMouseDown = false;
+        this.mouseDown = false;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
         
-        // Connection mode
-        this.connectionMode = false;
+        // Drawing state
+        this.currentShape = null;
+        this.currentConnection = null;
         this.connectionStart = null;
-        this.connectionEnd = null;
-        this.tempConnection = null;
+        this.resizeHandle = null;
+        this.textEditElement = null;
+        
+        // History for undo/redo
+        this.history = [];
+        this.historyIndex = -1;
+        this.maxHistorySize = 50;
+        
+        // Rendering throttle to prevent infinite loops
+        this.renderRequested = false;
+        
+        // Default shape properties
+        this.defaults = {
+            rectangle: { width: 200, height: 120, borderRadius: 12 },
+            ellipse: { width: 200, height: 130 },
+            diamond: { width: 180, height: 180 },
+            text: { width: 120, height: 30, fontSize: 18 },
+            line: { strokeWidth: 3 },
+            connector: { strokeWidth: 3, arrowSize: 10 }
+        };
+        
+        // Style defaults
+        this.styleDefaults = {
+            stroke: '#111827',
+            strokeWidth: 3,
+            fill: '#FFFFFF',
+            selection: '#3B82F6',
+            fontSize: 18,
+            fontFamily: 'Arial, sans-serif',
+            textAlign: 'center'
+        };
+        
+        // Snap settings
+        this.snapRadius = 12;
+        this.gridSize = 20;
+        this.snapToGrid = false;
+        
+        // Import/Export
+        this.currentDocument = {
+            methodology: 'BDD',
+            title: 'Untitled Diagram',
+            elements: [],
+            connections: []
+        };
         
         this.init();
     }
@@ -43,22 +93,60 @@ class DiagrammingInterface {
     init() {
         this.setupCanvas();
         this.setupEventListeners();
-        this.setupDragAndDrop();
         this.setupToolbar();
-        this.setupProperties();
-        this.render();
+        this.setupModals();
+        this.requestRender();
         this.saveState();
+        this.updateUI();
+    }
+    
+    // Throttled rendering to prevent infinite loops
+    requestRender() {
+        if (!this.renderRequested) {
+            this.renderRequested = true;
+            requestAnimationFrame(() => {
+                this.render();
+                this.renderRequested = false;
+            });
+        }
     }
     
     setupCanvas() {
-        // Set canvas size to match container without DPI scaling issues
-        const container = this.canvas.parentElement;
-        const rect = container.getBoundingClientRect();
+        // Set up viewport
+        const rect = this.canvasWrapper.getBoundingClientRect();
+        this.viewportWidth = rect.width - 40; // Account for padding
+        this.viewportHeight = rect.height - 40;
         
-        this.canvas.width = rect.width - 32; // Account for margin
-        this.canvas.height = rect.height - 32;
-        this.canvas.style.width = (rect.width - 32) + 'px';
-        this.canvas.style.height = (rect.height - 32) + 'px';
+        // Set canvas display size to fit viewport
+        const displayWidth = Math.min(this.viewportWidth, 1200);
+        const displayHeight = Math.min(this.viewportHeight, 800);
+        
+        this.canvas.style.width = displayWidth + 'px';
+        this.canvas.style.height = displayHeight + 'px';
+        
+        // Set actual canvas size for drawing - use higher resolution for crisp rendering
+        this.canvas.width = displayWidth * window.devicePixelRatio || displayWidth;
+        this.canvas.height = displayHeight * window.devicePixelRatio || displayHeight;
+        
+        // Scale context to match device pixel ratio
+        const ratio = window.devicePixelRatio || 1;
+        if (ratio !== 1) {
+            this.ctx.scale(ratio, ratio);
+        }
+        
+        // Store display dimensions for coordinate calculations
+        this.displayWidth = displayWidth;
+        this.displayHeight = displayHeight;
+        
+        // Initialize view
+        this.panX = 0;
+        this.panY = 0;
+        this.zoom = 1;
+    }
+    
+    updateCanvasTransform() {
+        // Simple transform for pan and zoom
+        this.ctx.setTransform(this.zoom, 0, 0, this.zoom, this.panX, this.panY);
     }
     
     setupEventListeners() {
@@ -66,350 +154,295 @@ class DiagrammingInterface {
         this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
         this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
         this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('click', this.handleClick.bind(this));
         this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+        this.canvas.addEventListener('wheel', this.handleWheel.bind(this));
+        this.canvas.addEventListener('contextmenu', e => e.preventDefault());
         
         // Window events
         window.addEventListener('resize', this.handleResize.bind(this));
         window.addEventListener('keydown', this.handleKeyDown.bind(this));
+        window.addEventListener('keyup', this.handleKeyUp.bind(this));
         
-        // Prevent context menu
-        this.canvas.addEventListener('contextmenu', e => e.preventDefault());
-    }
-    
-    setupDragAndDrop() {
-        const shapeItems = document.querySelectorAll('.shape-item');
+        // Prevent default drag behavior
+        this.canvas.addEventListener('dragstart', e => e.preventDefault());
         
-        shapeItems.forEach(item => {
-            // Add click handler as fallback for drag-and-drop
-            item.addEventListener('click', (e) => {
-                const shapeType = item.dataset.shape;
-                // Create shape at center of canvas
-                const centerX = this.canvas.width / 2;
-                const centerY = this.canvas.height / 2;
-                this.createShape(shapeType, centerX, centerY);
-            });
-            
-            item.addEventListener('dragstart', (e) => {
-                const shapeType = item.dataset.shape;
-                e.dataTransfer.setData('text/plain', shapeType);
-                item.classList.add('dragging');
-            });
-            
-            item.addEventListener('dragend', (e) => {
-                item.classList.remove('dragging');
-            });
-        });
-        
-        // Canvas drop zone
-        this.canvas.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            this.canvas.parentElement.classList.add('drag-over');
-        });
-        
-        this.canvas.addEventListener('dragleave', (e) => {
-            this.canvas.parentElement.classList.remove('drag-over');
-        });
-        
-        this.canvas.addEventListener('drop', (e) => {
-            e.preventDefault();
-            this.canvas.parentElement.classList.remove('drag-over');
-            
-            const shapeType = e.dataTransfer.getData('text/plain');
-            const rect = this.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            this.createShape(shapeType, x, y);
-        });
+        // File drop support
+        document.addEventListener('dragover', e => e.preventDefault());
+        document.addEventListener('drop', this.handleFileDrop.bind(this));
     }
     
     setupToolbar() {
-        // File operations
-        document.getElementById('newBtn').addEventListener('click', () => this.newDiagram());
-        document.getElementById('saveBtn').addEventListener('click', () => this.saveDiagram());
-        document.getElementById('exportBtn').addEventListener('click', () => this.exportDiagram());
-        
-        // Edit operations
-        document.getElementById('undoBtn').addEventListener('click', () => this.undo());
-        document.getElementById('redoBtn').addEventListener('click', () => this.redo());
-        
-        // Zoom operations
-        document.getElementById('zoomInBtn').addEventListener('click', () => this.zoomIn());
-        document.getElementById('zoomOutBtn').addEventListener('click', () => this.zoomOut());
-        document.getElementById('resetZoomBtn').addEventListener('click', () => this.resetZoom());
-    }
-    
-    setupProperties() {
-        // Property change listeners
-        document.getElementById('fillColor').addEventListener('change', (e) => {
-            if (this.selectedElement) {
-                this.selectedElement.fillColor = e.target.value;
-                this.render();
-                this.saveState();
+        // Tool buttons
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            if (btn.dataset.tool) {
+                btn.addEventListener('click', () => {
+                    this.setTool(btn.dataset.tool);
+                });
             }
-        });
-        
-        document.getElementById('borderColor').addEventListener('change', (e) => {
-            if (this.selectedElement) {
-                this.selectedElement.borderColor = e.target.value;
-                this.render();
-                this.saveState();
-            }
-        });
-        
-        document.getElementById('borderWidth').addEventListener('input', (e) => {
-            if (this.selectedElement) {
-                this.selectedElement.borderWidth = parseInt(e.target.value);
-                document.getElementById('borderWidthValue').textContent = e.target.value + 'px';
-                this.render();
-                this.saveState();
-            }
-        });
-        
-        document.getElementById('elementText').addEventListener('input', (e) => {
-            if (this.selectedElement) {
-                this.selectedElement.text = e.target.value;
-                this.render();
-                this.saveState();
-            }
-        });
-        
-        document.getElementById('fontSize').addEventListener('input', (e) => {
-            if (this.selectedElement) {
-                this.selectedElement.fontSize = parseInt(e.target.value);
-                document.getElementById('fontSizeValue').textContent = e.target.value + 'px';
-                this.render();
-                this.saveState();
-            }
-        });
-        
-        // Position and size inputs
-        ['posX', 'posY', 'width', 'height'].forEach(id => {
-            document.getElementById(id).addEventListener('change', (e) => {
-                if (this.selectedElement) {
-                    const value = parseFloat(e.target.value);
-                    if (id === 'posX') this.selectedElement.x = value;
-                    else if (id === 'posY') this.selectedElement.y = value;
-                    else if (id === 'width') this.selectedElement.width = Math.max(20, value);
-                    else if (id === 'height') this.selectedElement.height = Math.max(20, value);
-                    this.render();
-                    this.saveState();
-                }
-            });
         });
         
         // Action buttons
-        document.getElementById('deleteElement').addEventListener('click', () => this.deleteSelected());
-        document.getElementById('duplicateElement').addEventListener('click', () => this.duplicateSelected());
+        document.getElementById('importBtn').addEventListener('click', () => this.showImportModal());
+        document.getElementById('exportBtn').addEventListener('click', () => this.showExportModal());
+        document.getElementById('undoBtn').addEventListener('click', () => this.undo());
+        document.getElementById('redoBtn').addEventListener('click', () => this.redo());
+        document.getElementById('deleteBtn').addEventListener('click', () => this.deleteSelected());
+        document.getElementById('zoomInBtn').addEventListener('click', () => this.zoomIn());
+        document.getElementById('zoomOutBtn').addEventListener('click', () => this.zoomOut());
+        
+        // Render Diagram button
+        document.getElementById('renderDiagramBtn').addEventListener('click', () => this.renderDiagram());
     }
     
-    createShape(type, x, y) {
-        const element = {
-            id: Date.now() + Math.random(),
-            type: type,
-            x: x - 50,
-            y: y - 25,
-            width: 100,
-            height: 50,
-            fillColor: '#ffffff',
-            borderColor: '#000000',
-            borderWidth: 2,
-            text: type.charAt(0).toUpperCase() + type.slice(1),
-            fontSize: 14,
-            rotation: 0,
-            connectionPoints: []
-        };
-        
-        // Adjust default sizes and properties for different shapes
-        switch (type) {
-            case 'circle':
-                element.width = element.height = 80;
-                element.fillColor = '#e3f2fd';
-                break;
-            case 'diamond':
-            case 'decision':
-                element.width = element.height = 80;
-                element.fillColor = '#fff3e0';
-                break;
-            case 'triangle':
-                element.width = 80;
-                element.height = 70;
-                element.fillColor = '#f3e5f5';
-                break;
-            case 'text':
-                element.width = 120;
-                element.height = 30;
-                element.fillColor = 'transparent';
-                element.borderColor = 'transparent';
-                element.text = 'Text';
-                break;
-            case 'arrow':
-                element.width = 100;
-                element.height = 20;
-                element.fillColor = '#333333';
-                element.text = '';
-                break;
-            case 'process':
-                element.fillColor = '#e8f5e8';
-                break;
-            case 'start-end':
-                element.fillColor = '#fff8e1';
-                element.width = 120;
-                element.height = 60;
-                break;
-        }
-        
-        // Add connection points
-        this.updateConnectionPoints(element);
-        
-        this.elements.push(element);
-        this.selectElement(element);
-        this.render();
-        this.saveState();
-    }
-    
-    updateConnectionPoints(element) {
-        element.connectionPoints = [
-            { x: element.x + element.width / 2, y: element.y }, // top
-            { x: element.x + element.width, y: element.y + element.height / 2 }, // right
-            { x: element.x + element.width / 2, y: element.y + element.height }, // bottom
-            { x: element.x, y: element.y + element.height / 2 } // left
-        ];
-    }
-    
-    selectElement(element) {
-        this.selectedElement = element;
-        this.updatePropertiesPanel();
-        this.render();
-    }
-    
-    updatePropertiesPanel() {
-        const noSelection = document.getElementById('noSelection');
-        const elementProperties = document.getElementById('elementProperties');
-        
-        if (this.selectedElement) {
-            noSelection.style.display = 'none';
-            elementProperties.style.display = 'block';
-            
-            // Update property values
-            document.getElementById('fillColor').value = this.selectedElement.fillColor === 'transparent' ? '#ffffff' : this.selectedElement.fillColor;
-            document.getElementById('borderColor').value = this.selectedElement.borderColor === 'transparent' ? '#000000' : this.selectedElement.borderColor;
-            document.getElementById('borderWidth').value = this.selectedElement.borderWidth;
-            document.getElementById('borderWidthValue').textContent = this.selectedElement.borderWidth + 'px';
-            document.getElementById('elementText').value = this.selectedElement.text;
-            document.getElementById('fontSize').value = this.selectedElement.fontSize;
-            document.getElementById('fontSizeValue').textContent = this.selectedElement.fontSize + 'px';
-            document.getElementById('posX').value = Math.round(this.selectedElement.x);
-            document.getElementById('posY').value = Math.round(this.selectedElement.y);
-            document.getElementById('width').value = Math.round(this.selectedElement.width);
-            document.getElementById('height').value = Math.round(this.selectedElement.height);
-        } else {
-            noSelection.style.display = 'block';
-            elementProperties.style.display = 'none';
-        }
-    }
-    
-    handleMouseDown(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        this.mouseX = e.clientX - rect.left;
-        this.mouseY = e.clientY - rect.top;
-        this.lastMouseX = this.mouseX;
-        this.lastMouseY = this.mouseY;
-        this.isMouseDown = true;
-        
-        // Check if clicking on a connection point first
-        const connectionPoint = this.getConnectionPointAt(this.mouseX, this.mouseY);
-        if (connectionPoint && this.selectedElement) {
-            // Start connection mode
-            this.connectionMode = true;
-            this.connectionStart = {
-                element: this.selectedElement,
-                point: connectionPoint
-            };
-            this.canvas.style.cursor = 'crosshair';
-            e.preventDefault();
+    renderDiagram() {
+        if (!this.parsedImportData || !this.parsedImportData.elements || this.parsedImportData.elements.length === 0) {
+            alert('No imported data to render. Please import a markdown file first.');
             return;
         }
         
-        // Check if clicking on an element
-        const clickedElement = this.getElementAt(this.mouseX, this.mouseY);
-        
-        if (clickedElement) {
-            this.selectElement(clickedElement);
-            if (!this.connectionMode) {
-                this.isDragging = true;
-                this.draggedElement = clickedElement;
-                this.canvas.style.cursor = 'grabbing';
-            }
-        } else {
-            this.selectedElement = null;
-            this.connectionMode = false;
-            this.connectionStart = null;
-            this.tempConnection = null;
-            this.updatePropertiesPanel();
-            this.render();
+        try {
+            // Clear current diagram
+            this.elements = [];
+            this.connections = [];
+            
+            // Create a copy of parsed elements and enhance them
+            const elementsToRender = JSON.parse(JSON.stringify(this.parsedImportData.elements));
+            const connectionsToRender = JSON.parse(JSON.stringify(this.parsedImportData.connections));
+            
+            // Layout elements in a better arrangement
+            this.layoutElements(elementsToRender);
+            
+            // Add elements to canvas
+            this.elements = elementsToRender;
+            this.connections = connectionsToRender;
+            
+            // Update connections to reference the new element objects
+            this.connections.forEach(connection => {
+                const startIndex = this.parsedImportData.elements.indexOf(connection.startElement);
+                const endIndex = this.parsedImportData.elements.indexOf(connection.endElement);
+                
+                if (startIndex >= 0 && endIndex >= 0) {
+                    connection.startElement = this.elements[startIndex];
+                    connection.endElement = this.elements[endIndex];
+                    
+                    // Update anchor positions
+                    connection.startAnchor = this.getElementAnchors(connection.startElement)[2]; // South
+                    connection.endAnchor = this.getElementAnchors(connection.endElement)[0]; // North
+                }
+            });
+            
+            // Clear selection and render
+            this.clearSelection();
+            this.requestRender();
+            this.saveState();
+            this.updateUI();
+            
+            alert(`Diagram rendered successfully! Created ${this.elements.length} elements and ${this.connections.length} connections.`);
+            
+        } catch (error) {
+            console.error('Error rendering diagram:', error);
+            alert('Error rendering diagram: ' + error.message);
         }
+    }
+    
+    layoutElements(elements) {
+        // Simple top-down layout with better spacing
+        const startX = 300;
+        const startY = 100;
+        const verticalSpacing = 180;
+        const horizontalSpacing = 250;
+        
+        let currentX = startX;
+        let currentY = startY;
+        let maxElementsPerRow = 3;
+        let elementsInCurrentRow = 0;
+        
+        elements.forEach((element, index) => {
+            element.x = currentX;
+            element.y = currentY;
+            
+            // Ensure proper sizing
+            if (element.type === 'diamond') {
+                element.width = Math.max(element.width, 180);
+                element.height = Math.max(element.height, 180);
+            } else {
+                element.width = Math.max(element.width, 200);
+                element.height = Math.max(element.height, 120);
+            }
+            
+            elementsInCurrentRow++;
+            
+            // Move to next position
+            if (elementsInCurrentRow >= maxElementsPerRow) {
+                // Move to next row
+                currentX = startX;
+                currentY += verticalSpacing;
+                elementsInCurrentRow = 0;
+            } else {
+                // Move to next column
+                currentX += horizontalSpacing;
+            }
+        });
+    }
+    
+    setupModals() {
+        // Import modal
+        const importModal = document.getElementById('importModal');
+        const closeImportBtn = document.getElementById('closeImportModal');
+        const cancelImportBtn = document.getElementById('cancelImportBtn');
+        const previewImportBtn = document.getElementById('previewImportBtn');
+        const confirmImportBtn = document.getElementById('confirmImportBtn');
+        const fileInput = document.getElementById('fileInput');
+        const markdownInput = document.getElementById('markdownInput');
+        
+        closeImportBtn.addEventListener('click', () => this.hideModal('importModal'));
+        cancelImportBtn.addEventListener('click', () => this.hideModal('importModal'));
+        previewImportBtn.addEventListener('click', () => this.previewImport());
+        confirmImportBtn.addEventListener('click', () => this.confirmImport());
+        fileInput.addEventListener('change', this.handleFileUpload.bind(this));
+        markdownInput.addEventListener('input', this.enablePreviewButton.bind(this));
+        
+        // Export modal
+        const exportModal = document.getElementById('exportModal');
+        const closeExportBtn = document.getElementById('closeExportModal');
+        const cancelExportBtn = document.getElementById('cancelExportBtn');
+        const confirmExportBtn = document.getElementById('confirmExportBtn');
+        
+        closeExportBtn.addEventListener('click', () => this.hideModal('exportModal'));
+        cancelExportBtn.addEventListener('click', () => this.hideModal('exportModal'));
+        confirmExportBtn.addEventListener('click', () => this.confirmExport());
+        
+        // Text edit modal
+        const textEditModal = document.getElementById('textEditModal');
+        const saveTextBtn = document.getElementById('saveTextBtn');
+        const cancelTextBtn = document.getElementById('cancelTextBtn');
+        
+        saveTextBtn.addEventListener('click', () => this.saveTextEdit());
+        cancelTextBtn.addEventListener('click', () => this.cancelTextEdit());
+        
+        // Close modals when clicking outside
+        [importModal, exportModal, textEditModal].forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.hideModal(modal.id);
+                }
+            });
+        });
+    }
+    
+    // Tool Management
+    setTool(tool) {
+        this.currentTool = tool;
+        
+        // Update UI
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tool === tool);
+        });
+        
+        // Update cursor
+        this.updateCursor();
+        
+        // Clear current drawing state
+        this.isDrawing = false;
+        this.isConnecting = false;
+        this.currentShape = null;
+        this.currentConnection = null;
+        this.connectionStart = null;
+    }
+    
+    updateCursor() {
+        const wrapper = this.canvasWrapper;
+        wrapper.className = wrapper.className.replace(/cursor-\w+/g, '');
+        
+        if (this.isPanning) {
+            wrapper.classList.add('cursor-panning');
+        } else {
+            switch (this.currentTool) {
+                case 'select':
+                    wrapper.classList.add('cursor-select');
+                    break;
+                case 'pan':
+                    wrapper.classList.add('cursor-pan');
+                    break;
+                case 'text':
+                    wrapper.classList.add('cursor-text');
+                    break;
+                case 'connector':
+                    wrapper.classList.add('cursor-crosshair');
+                    break;
+                default:
+                    wrapper.classList.add('cursor-crosshair');
+            }
+        }
+    }
+    
+    // Event Handlers
+    handleMouseDown(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        // Convert screen coordinates to canvas coordinates
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        
+        // Transform to world coordinates (accounting for pan and zoom)
+        this.mouseX = (screenX - this.panX) / this.zoom;
+        this.mouseY = (screenY - this.panY) / this.zoom;
+        
+        this.lastMouseX = this.mouseX;
+        this.lastMouseY = this.mouseY;
+        this.dragStartX = this.mouseX;
+        this.dragStartY = this.mouseY;
+        this.mouseDown = true;
         
         e.preventDefault();
+        
+        // Handle different tools
+        switch (this.currentTool) {
+            case 'select':
+                this.handleSelectMouseDown(e);
+                break;
+            case 'pan':
+                this.startPanning();
+                break;
+            case 'rectangle':
+            case 'ellipse':
+            case 'diamond':
+            case 'text':
+                this.startDrawingShape();
+                break;
+            case 'line':
+                this.startDrawingLine();
+                break;
+            case 'connector':
+                this.startDrawingConnector();
+                break;
+        }
     }
     
     handleMouseMove(e) {
         const rect = this.canvas.getBoundingClientRect();
-        this.mouseX = e.clientX - rect.left;
-        this.mouseY = e.clientY - rect.top;
+        // Convert screen coordinates to canvas coordinates
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
         
-        // Handle connection mode
-        if (this.connectionMode && this.connectionStart) {
-            // Update temporary connection line
-            this.tempConnection = {
-                start: this.connectionStart.point,
-                end: { x: this.mouseX, y: this.mouseY }
-            };
-            this.render();
-            this.drawTempConnection();
-            return;
-        }
+        // Transform to world coordinates (accounting for pan and zoom)
+        this.mouseX = (screenX - this.panX) / this.zoom;
+        this.mouseY = (screenY - this.panY) / this.zoom;
         
-        // Update cursor based on what's under the mouse
-        const connectionPoint = this.getConnectionPointAt(this.mouseX, this.mouseY);
-        if (connectionPoint && this.selectedElement) {
-            this.canvas.style.cursor = 'crosshair';
-        } else {
-            const elementUnderMouse = this.getElementAt(this.mouseX, this.mouseY);
-            if (elementUnderMouse && !this.isDragging && !this.connectionMode) {
-                this.canvas.style.cursor = 'grab';
-            } else if (!this.isDragging && !this.connectionMode) {
-                this.canvas.style.cursor = 'default';
+        if (this.mouseDown) {
+            if (this.isPanning) {
+                this.updatePanning(screenX, screenY);
+            } else if (this.isDragging) {
+                this.updateDragging();
+            } else if (this.isDrawing) {
+                this.updateDrawing();
+            } else if (this.isConnecting) {
+                this.updateConnecting();
+            } else if (this.isResizing) {
+                this.updateResizing();
             }
-        }
-        
-        if (this.isDragging && this.draggedElement && this.isMouseDown) {
-            const deltaX = this.mouseX - this.lastMouseX;
-            const deltaY = this.mouseY - this.lastMouseY;
             
-            this.draggedElement.x += deltaX;
-            this.draggedElement.y += deltaY;
-            
-            // Update connection points
-            this.updateConnectionPoints(this.draggedElement);
-            
-            // Update any connections to this element
-            this.connections.forEach(conn => {
-                if (conn.startElement === this.draggedElement) {
-                    conn.start = this.draggedElement.connectionPoints.find(p => 
-                        Math.abs(p.x - conn.start.x) < 10 && Math.abs(p.y - conn.start.y) < 10
-                    ) || conn.start;
-                }
-                if (conn.endElement === this.draggedElement) {
-                    conn.end = this.draggedElement.connectionPoints.find(p => 
-                        Math.abs(p.x - conn.end.x) < 10 && Math.abs(p.y - conn.end.y) < 10
-                    ) || conn.end;
-                }
-            });
-            
-            this.render();
-            this.updatePropertiesPanel();
+            // Only render during active interactions to prevent infinite loops
+            this.requestRender();
         }
         
         this.lastMouseX = this.mouseX;
@@ -417,985 +450,426 @@ class DiagrammingInterface {
     }
     
     handleMouseUp(e) {
-        if (this.isDragging) {
+        if (this.isDrawing) {
+            this.finishDrawing();
+        } else if (this.isConnecting) {
+            this.finishConnecting();
+        } else if (this.isDragging || this.isResizing) {
             this.saveState();
         }
         
-        // Handle connection completion
-        if (this.connectionMode && this.connectionStart) {
-            const targetElement = this.getElementAt(this.mouseX, this.mouseY);
-            const targetConnectionPoint = this.getConnectionPointAt(this.mouseX, this.mouseY);
-            
-            if (targetElement && targetElement !== this.connectionStart.element) {
-                // Find the closest connection point on the target element
-                let closestPoint = targetElement.connectionPoints[0];
-                let minDistance = Infinity;
-                
-                targetElement.connectionPoints.forEach(point => {
-                    const distance = Math.sqrt((this.mouseX - point.x) ** 2 + (this.mouseY - point.y) ** 2);
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestPoint = point;
-                    }
-                });
-                
-                // Create the connection
-                const connection = {
-                    id: Date.now() + Math.random(),
-                    startElement: this.connectionStart.element,
-                    endElement: targetElement,
-                    start: { ...this.connectionStart.point },
-                    end: { ...closestPoint }
-                };
-                
-                this.connections.push(connection);
-                this.saveState();
-            }
-            
-            // Reset connection mode
-            this.connectionMode = false;
-            this.connectionStart = null;
-            this.tempConnection = null;
-            this.render();
-        }
-        
+        this.mouseDown = false;
         this.isDragging = false;
-        this.draggedElement = null;
-        this.isMouseDown = false;
-        this.canvas.style.cursor = 'default';
+        this.isDrawing = false;
+        this.isConnecting = false;
+        this.isResizing = false;
+        this.isPanning = false;
+        this.currentShape = null;
+        this.currentConnection = null;
+        this.connectionStart = null;
+        this.resizeHandle = null;
         
-        // Update cursor for element under mouse
-        const elementUnderMouse = this.getElementAt(this.mouseX, this.mouseY);
-        if (elementUnderMouse) {
-            this.canvas.style.cursor = 'grab';
-        }
-    }
-    
-    handleClick(e) {
-        // Click handling is done in mousedown for better responsiveness
+        this.updateCursor();
+        this.requestRender();
     }
     
     handleDoubleClick(e) {
-        const clickedElement = this.getElementAt(this.mouseX, this.mouseY);
-        if (clickedElement) {
-            // Focus on text input for editing
-            document.getElementById('elementText').focus();
-            document.getElementById('elementText').select();
+        if (this.currentTool === 'select') {
+            const element = this.getElementAt(this.mouseX, this.mouseY);
+            if (element && (element.type === 'rectangle' || element.type === 'ellipse' || 
+                           element.type === 'diamond' || element.type === 'text')) {
+                this.editText(element);
+            }
+        }
+    }
+    
+    handleWheel(e) {
+        e.preventDefault();
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        // Zoom towards mouse position
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        const newZoom = Math.max(0.5, Math.min(3, this.zoom * zoomFactor));
+        
+        if (newZoom !== this.zoom) {
+            const zoomRatio = newZoom / this.zoom;
+            this.panX = mouseX - (mouseX - this.panX) * zoomRatio;
+            this.panY = mouseY - (mouseY - this.panY) * zoomRatio;
+            this.zoom = newZoom;
+            
+            this.updateCanvasTransform();
+            this.requestRender();
+            this.updateUI();
+        }
+    }
+    
+    handleKeyDown(e) {
+        // Handle space for panning
+        if (e.code === 'Space' && !this.isPanning && this.currentTool !== 'text') {
+            e.preventDefault();
+            this.setTool('pan');
+            return;
+        }
+        
+        // Handle shortcuts
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key) {
+                case 'z':
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        this.redo();
+                    } else {
+                        this.undo();
+                    }
+                    break;
+                case 'y':
+                    e.preventDefault();
+                    this.redo();
+                    break;
+                case 'a':
+                    e.preventDefault();
+                    this.selectAll();
+                    break;
+                case 'i':
+                    e.preventDefault();
+                    this.showImportModal();
+                    break;
+                case 'd':
+                    e.preventDefault();
+                    this.duplicateSelected();
+                    break;
+            }
+        } else {
+            switch (e.key) {
+                case 'Delete':
+                case 'Backspace':
+                    this.deleteSelected();
+                    break;
+                case 'Escape':
+                    this.clearSelection();
+                    this.setTool('select');
+                    break;
+            }
+        }
+    }
+    
+    handleKeyUp(e) {
+        if (e.code === 'Space' && this.currentTool === 'pan') {
+            this.setTool('select');
         }
     }
     
     handleResize() {
         this.setupCanvas();
-        this.render();
+        this.requestRender();
     }
     
-    handleKeyDown(e) {
-        if (e.key === 'Delete' && this.selectedElement) {
-            this.deleteSelected();
-        } else if (e.key === 'Escape') {
-            this.selectedElement = null;
-            this.updatePropertiesPanel();
-            this.render();
-        } else if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'z') {
-                e.preventDefault();
-                this.undo();
-            } else if (e.key === 'y') {
-                e.preventDefault();
-                this.redo();
-            } else if (e.key === 'd') {
-                e.preventDefault();
-                this.duplicateSelected();
+    handleFileDrop(e) {
+        e.preventDefault();
+        const files = e.dataTransfer.files;
+        for (let file of files) {
+            if (file.name.endsWith('.md')) {
+                this.loadFile(file);
+                break;
             }
         }
     }
     
-    getElementAt(x, y) {
-        // Check elements in reverse order (top to bottom)
-        for (let i = this.elements.length - 1; i >= 0; i--) {
-            const element = this.elements[i];
-            if (this.isPointInElement(x, y, element)) {
-                return element;
+    // Select Tool Handlers
+    handleSelectMouseDown(e) {
+        const element = this.getElementAt(this.mouseX, this.mouseY);
+        
+        if (element) {
+            // Check for resize handle
+            const handle = this.getResizeHandle(element, this.mouseX, this.mouseY);
+            if (handle) {
+                this.isResizing = true;
+                this.resizeHandle = handle;
+                this.selectElement(element);
+                return;
             }
-        }
-        return null;
-    }
-    
-    getConnectionPointAt(x, y) {
-        if (!this.selectedElement) return null;
-        
-        for (let point of this.selectedElement.connectionPoints) {
-            const distance = Math.sqrt((x - point.x) ** 2 + (y - point.y) ** 2);
-            if (distance <= 8) { // 8px radius for connection point hit detection
-                return point;
+            
+            // Select element
+            if (!e.ctrlKey && !e.metaKey) {
+                if (!this.selectedElements.includes(element)) {
+                    this.selectElement(element);
+                }
+            } else {
+                this.toggleSelection(element);
             }
-        }
-        return null;
-    }
-    
-    isPointInElement(x, y, element) {
-        // Handle different shape types for more accurate hit detection
-        switch (element.type) {
-            case 'circle':
-                const centerX = element.x + element.width / 2;
-                const centerY = element.y + element.height / 2;
-                const radius = Math.min(element.width, element.height) / 2;
-                const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-                return distance <= radius;
-                
-            case 'diamond':
-            case 'decision':
-                // Diamond hit detection
-                const diamondCenterX = element.x + element.width / 2;
-                const diamondCenterY = element.y + element.height / 2;
-                const relX = Math.abs(x - diamondCenterX);
-                const relY = Math.abs(y - diamondCenterY);
-                return (relX / (element.width / 2) + relY / (element.height / 2)) <= 1;
-                
-            case 'triangle':
-                // Simple triangle hit detection (could be improved)
-                return x >= element.x && x <= element.x + element.width &&
-                       y >= element.y && y <= element.y + element.height;
-                
-            default:
-                // Rectangle hit detection
-                return x >= element.x && x <= element.x + element.width &&
-                       y >= element.y && y <= element.y + element.height;
+            
+            // Start dragging
+            this.isDragging = true;
+        } else {
+            // Clear selection if not holding Ctrl/Cmd
+            if (!e.ctrlKey && !e.metaKey) {
+                this.clearSelection();
+            }
+            
+            // Start marquee selection (not implemented in minimal version)
         }
     }
     
-    render() {
-        // Clear canvas
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        // Apply zoom and pan
-        this.ctx.save();
-        this.ctx.scale(this.zoom, this.zoom);
-        this.ctx.translate(this.panX, this.panY);
-        
-        // Draw all connections first (behind elements)
-        this.connections.forEach(connection => {
-            this.drawConnection(connection);
-        });
-        
-        // Draw all elements
-        this.elements.forEach(element => {
-            this.drawElement(element);
-        });
-        
-        // Draw selection outline and handles
-        if (this.selectedElement) {
-            this.drawSelection(this.selectedElement);
-            this.drawConnectionPoints(this.selectedElement);
-        }
-        
-        this.ctx.restore();
-        
-        // Update canvas info
-        document.getElementById('canvasInfo').textContent = 
-            `Elements: ${this.elements.length} | Connections: ${this.connections.length} | Zoom: ${Math.round(this.zoom * 100)}%`;
-    }
-    
-    drawElement(element) {
-        this.ctx.save();
-        
-        // Set styles
-        this.ctx.fillStyle = element.fillColor;
-        this.ctx.strokeStyle = element.borderColor;
-        this.ctx.lineWidth = element.borderWidth;
-        this.ctx.font = `${element.fontSize}px Arial`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        
-        // Draw shape based on type
-        switch (element.type) {
-            case 'rectangle':
-            case 'process':
-                this.drawRectangle(element);
-                break;
-            case 'circle':
-                this.drawCircle(element);
-                break;
-            case 'diamond':
-            case 'decision':
-                this.drawDiamond(element);
-                break;
-            case 'triangle':
-                this.drawTriangle(element);
-                break;
-            case 'start-end':
-                this.drawRoundedRectangle(element);
-                break;
-            case 'text':
-                this.drawText(element);
-                break;
-            case 'arrow':
-                this.drawArrow(element);
-                break;
-        }
-        
-        this.ctx.restore();
-    }
-    
-    drawRectangle(element) {
-        if (element.fillColor !== 'transparent') {
-            this.ctx.fillRect(element.x, element.y, element.width, element.height);
-        }
-        if (element.borderColor !== 'transparent') {
-            this.ctx.strokeRect(element.x, element.y, element.width, element.height);
-        }
-        
-        // Draw text
-        if (element.text) {
-            this.ctx.fillStyle = '#000000';
-            this.ctx.fillText(element.text, 
-                element.x + element.width / 2, 
-                element.y + element.height / 2);
-        }
-    }
-    
-    drawCircle(element) {
-        const centerX = element.x + element.width / 2;
-        const centerY = element.y + element.height / 2;
-        const radius = Math.min(element.width, element.height) / 2;
-        
-        this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        
-        if (element.fillColor !== 'transparent') {
-            this.ctx.fill();
-        }
-        if (element.borderColor !== 'transparent') {
-            this.ctx.stroke();
-        }
-        
-        // Draw text
-        if (element.text) {
-            this.ctx.fillStyle = '#000000';
-            this.ctx.fillText(element.text, centerX, centerY);
-        }
-    }
-    
-    drawDiamond(element) {
-        const centerX = element.x + element.width / 2;
-        const centerY = element.y + element.height / 2;
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, element.y);
-        this.ctx.lineTo(element.x + element.width, centerY);
-        this.ctx.lineTo(centerX, element.y + element.height);
-        this.ctx.lineTo(element.x, centerY);
-        this.ctx.closePath();
-        
-        if (element.fillColor !== 'transparent') {
-            this.ctx.fill();
-        }
-        if (element.borderColor !== 'transparent') {
-            this.ctx.stroke();
-        }
-        
-        // Draw text
-        if (element.text) {
-            this.ctx.fillStyle = '#000000';
-            this.ctx.fillText(element.text, centerX, centerY);
-        }
-    }
-    
-    drawTriangle(element) {
-        const centerX = element.x + element.width / 2;
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, element.y);
-        this.ctx.lineTo(element.x + element.width, element.y + element.height);
-        this.ctx.lineTo(element.x, element.y + element.height);
-        this.ctx.closePath();
-        
-        if (element.fillColor !== 'transparent') {
-            this.ctx.fill();
-        }
-        if (element.borderColor !== 'transparent') {
-            this.ctx.stroke();
-        }
-        
-        // Draw text
-        if (element.text) {
-            this.ctx.fillStyle = '#000000';
-            this.ctx.fillText(element.text, centerX, element.y + element.height * 0.6);
-        }
-    }
-    
-    drawRoundedRectangle(element) {
-        const radius = Math.min(element.width, element.height) / 4;
-        
-        this.ctx.beginPath();
-        this.ctx.roundRect(element.x, element.y, element.width, element.height, radius);
-        
-        if (element.fillColor !== 'transparent') {
-            this.ctx.fill();
-        }
-        if (element.borderColor !== 'transparent') {
-            this.ctx.stroke();
-        }
-        
-        // Draw text
-        if (element.text) {
-            this.ctx.fillStyle = '#000000';
-            this.ctx.fillText(element.text, 
-                element.x + element.width / 2, 
-                element.y + element.height / 2);
-        }
-    }
-    
-    drawText(element) {
-        // Draw background if not transparent
-        if (element.fillColor !== 'transparent') {
-            this.ctx.fillStyle = element.fillColor;
-            this.ctx.fillRect(element.x, element.y, element.width, element.height);
-        }
-        
-        this.ctx.fillStyle = '#000000';
-        this.ctx.fillText(element.text, 
-            element.x + element.width / 2, 
-            element.y + element.height / 2);
-    }
-    
-    drawArrow(element) {
-        const headLength = 15;
-        const headWidth = 8;
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(element.x, element.y + element.height / 2);
-        this.ctx.lineTo(element.x + element.width - headLength, element.y + element.height / 2);
-        
-        // Arrow head
-        this.ctx.lineTo(element.x + element.width - headLength, element.y + element.height / 2 - headWidth);
-        this.ctx.lineTo(element.x + element.width, element.y + element.height / 2);
-        this.ctx.lineTo(element.x + element.width - headLength, element.y + element.height / 2 + headWidth);
-        this.ctx.lineTo(element.x + element.width - headLength, element.y + element.height / 2);
-        
-        this.ctx.strokeStyle = element.fillColor;
-        this.ctx.lineWidth = element.borderWidth;
-        this.ctx.stroke();
-    }
-    
-    drawSelection(element) {
-        this.ctx.strokeStyle = '#2196f3';
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 5]);
-        this.ctx.strokeRect(element.x - 2, element.y - 2, element.width + 4, element.height + 4);
-        this.ctx.setLineDash([]);
-        
-        // Draw resize handles
-        const handles = [
-            { x: element.x - 4, y: element.y - 4 }, // top-left
-            { x: element.x + element.width - 4, y: element.y - 4 }, // top-right
-            { x: element.x - 4, y: element.y + element.height - 4 }, // bottom-left
-            { x: element.x + element.width - 4, y: element.y + element.height - 4 } // bottom-right
-        ];
-        
-        this.ctx.fillStyle = '#2196f3';
-        handles.forEach(handle => {
-            this.ctx.fillRect(handle.x, handle.y, 8, 8);
-        });
-    }
-    
-    drawConnectionPoints(element) {
-        this.ctx.fillStyle = '#ff4444';
-        element.connectionPoints.forEach(point => {
-            this.ctx.beginPath();
-            this.ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
-            this.ctx.fill();
-        });
-    }
-    
-    drawConnection(connection) {
-        this.ctx.strokeStyle = '#666666';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(connection.start.x, connection.start.y);
-        this.ctx.lineTo(connection.end.x, connection.end.y);
-        this.ctx.stroke();
-        
-        // Draw arrow head
-        const angle = Math.atan2(connection.end.y - connection.start.y, connection.end.x - connection.start.x);
-        const headLength = 10;
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(connection.end.x, connection.end.y);
-        this.ctx.lineTo(
-            connection.end.x - headLength * Math.cos(angle - Math.PI / 6),
-            connection.end.y - headLength * Math.sin(angle - Math.PI / 6)
-        );
-        this.ctx.moveTo(connection.end.x, connection.end.y);
-        this.ctx.lineTo(
-            connection.end.x - headLength * Math.cos(angle + Math.PI / 6),
-            connection.end.y - headLength * Math.sin(angle + Math.PI / 6)
-        );
-        this.ctx.stroke();
-    }
-    
-    drawTempConnection() {
-        if (!this.tempConnection) return;
-        
-        this.ctx.strokeStyle = '#2196f3';
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 5]);
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.tempConnection.start.x, this.tempConnection.start.y);
-        this.ctx.lineTo(this.tempConnection.end.x, this.tempConnection.end.y);
-        this.ctx.stroke();
-        this.ctx.setLineDash([]);
-        
-        // Draw temporary arrow head
-        const angle = Math.atan2(
-            this.tempConnection.end.y - this.tempConnection.start.y, 
-            this.tempConnection.end.x - this.tempConnection.start.x
-        );
-        const headLength = 10;
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.tempConnection.end.x, this.tempConnection.end.y);
-        this.ctx.lineTo(
-            this.tempConnection.end.x - headLength * Math.cos(angle - Math.PI / 6),
-            this.tempConnection.end.y - headLength * Math.sin(angle - Math.PI / 6)
-        );
-        this.ctx.moveTo(this.tempConnection.end.x, this.tempConnection.end.y);
-        this.ctx.lineTo(
-            this.tempConnection.end.x - headLength * Math.cos(angle + Math.PI / 6),
-            this.tempConnection.end.y - headLength * Math.sin(angle + Math.PI / 6)
-        );
-        this.ctx.stroke();
-    }
-    
-    // File operations
-    newDiagram() {
-        this.elements = [];
-        this.connections = [];
-        this.selectedElement = null;
-        this.updatePropertiesPanel();
-        this.render();
-        this.saveState();
-    }
-    
-    saveDiagram() {
-        const data = {
-            elements: this.elements,
-            connections: this.connections,
-            zoom: this.zoom,
-            panX: this.panX,
-            panY: this.panY
+    // Shape Drawing
+    startDrawingShape() {
+        this.isDrawing = true;
+        this.currentShape = {
+            type: this.currentTool,
+            x: this.mouseX,
+            y: this.mouseY,
+            width: 0,
+            height: 0,
+            ...this.getDefaultShapeProperties(this.currentTool)
         };
-        
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'diagram.json';
-        a.click();
-        URL.revokeObjectURL(url);
     }
     
-    exportDiagram() {
-        const link = document.createElement('a');
-        link.download = 'diagram.png';
-        link.href = this.canvas.toDataURL();
-        link.click();
+    updateDrawing() {
+        if (this.currentShape) {
+            const width = Math.abs(this.mouseX - this.dragStartX);
+            const height = Math.abs(this.mouseY - this.dragStartY);
+            
+            this.currentShape.x = Math.min(this.dragStartX, this.mouseX);
+            this.currentShape.y = Math.min(this.dragStartY, this.mouseY);
+            this.currentShape.width = Math.max(width, 20);
+            this.currentShape.height = Math.max(height, 20);
+            
+            // Maintain aspect ratio for diamond with Shift
+            if (this.currentShape.type === 'diamond' && event.shiftKey) {
+                const size = Math.max(this.currentShape.width, this.currentShape.height);
+                this.currentShape.width = size;
+                this.currentShape.height = size;
+            }
+        }
     }
     
-    // Edit operations
-    deleteSelected() {
-        if (this.selectedElement) {
-            const index = this.elements.indexOf(this.selectedElement);
-            if (index > -1) {
-                // Remove connections to this element
-                this.connections = this.connections.filter(conn => 
-                    conn.startElement !== this.selectedElement && 
-                    conn.endElement !== this.selectedElement
-                );
+    finishDrawing() {
+        if (this.currentShape) {
+            // Apply defaults for small shapes or single clicks
+            const defaults = this.defaults[this.currentShape.type];
+            if (defaults && (this.currentShape.width < 50 || this.currentShape.height < 30)) {
+                this.currentShape.width = defaults.width;
+                this.currentShape.height = defaults.height;
+            }
+            
+            // Ensure minimum size
+            this.currentShape.width = Math.max(this.currentShape.width, 20);
+            this.currentShape.height = Math.max(this.currentShape.height, 20);
+            
+            this.elements.push(this.currentShape);
+            this.selectElement(this.currentShape);
+            this.saveState();
+            
+            // Auto-edit text for text tool
+            if (this.currentShape.type === 'text') {
+                setTimeout(() => this.editText(this.currentShape), 100);
+            }
+        }
+    }
+    
+    // Line Drawing
+    startDrawingLine() {
+        this.isDrawing = true;
+        this.currentConnection = {
+            type: 'line',
+            startX: this.mouseX,
+            startY: this.mouseY,
+            endX: this.mouseX,
+            endY: this.mouseY,
+            ...this.getDefaultLineProperties()
+        };
+    }
+    
+    // Connector Drawing
+    startDrawingConnector() {
+        const element = this.getElementAt(this.mouseX, this.mouseY);
+        if (element) {
+            this.isConnecting = true;
+            this.connectionStart = {
+                element: element,
+                x: this.mouseX,
+                y: this.mouseY,
+                anchor: this.getNearestAnchor(element, this.mouseX, this.mouseY)
+            };
+        }
+    }
+    
+    updateConnecting() {
+        // Visual feedback during connection
+    }
+    
+    finishConnecting() {
+        if (this.connectionStart) {
+            const endElement = this.getElementAt(this.mouseX, this.mouseY);
+            if (endElement && endElement !== this.connectionStart.element) {
+                const endAnchor = this.getNearestAnchor(endElement, this.mouseX, this.mouseY);
                 
-                this.elements.splice(index, 1);
-                this.selectedElement = null;
-                this.updatePropertiesPanel();
-                this.render();
+                const connection = {
+                    type: 'connector',
+                    startElement: this.connectionStart.element,
+                    endElement: endElement,
+                    startAnchor: this.connectionStart.anchor,
+                    endAnchor: endAnchor,
+                    ...this.getDefaultConnectorProperties()
+                };
+                
+                this.connections.push(connection);
                 this.saveState();
             }
         }
     }
     
-    duplicateSelected() {
-        if (this.selectedElement) {
-            const newElement = { ...this.selectedElement };
-            newElement.id = Date.now() + Math.random();
-            newElement.x += 20;
-            newElement.y += 20;
-            this.updateConnectionPoints(newElement);
-            this.elements.push(newElement);
-            this.selectElement(newElement);
-            this.render();
+    // Panning
+    startPanning() {
+        this.isPanning = true;
+        this.updateCursor();
+    }
+    
+    updatePanning(screenX, screenY) {
+        // For panning, we work with screen coordinates directly
+        const rect = this.canvas.getBoundingClientRect();
+        const currentScreenX = screenX || (this.mouseX * this.zoom + this.panX);
+        const currentScreenY = screenY || (this.mouseY * this.zoom + this.panY);
+        
+        // Calculate screen delta
+        const deltaX = currentScreenX - (this.lastMouseX * this.zoom + this.panX);
+        const deltaY = currentScreenY - (this.lastMouseY * this.zoom + this.panY);
+        
+        this.panX += deltaX;
+        this.panY += deltaY;
+        
+        this.updateCanvasTransform();
+    }
+    
+    // Dragging
+    updateDragging() {
+        if (this.selectedElements.length > 0) {
+            const deltaX = this.mouseX - this.lastMouseX;
+            const deltaY = this.mouseY - this.lastMouseY;
+            
+            this.selectedElements.forEach(element => {
+                element.x += deltaX;
+                element.y += deltaY;
+                
+                // Keep within canvas bounds
+                element.x = Math.max(0, Math.min(this.canvasWidth - element.width, element.x));
+                element.y = Math.max(0, Math.min(this.canvasHeight - element.height, element.y));
+            });
+        }
+    }
+    
+    // Resizing
+    updateResizing() {
+        if (this.selectedElements.length === 1 && this.resizeHandle) {
+            const element = this.selectedElements[0];
+            const deltaX = this.mouseX - this.lastMouseX;
+            const deltaY = this.mouseY - this.lastMouseY;
+            
+            switch (this.resizeHandle) {
+                case 'se':
+                    element.width = Math.max(20, element.width + deltaX);
+                    element.height = Math.max(20, element.height + deltaY);
+                    break;
+                case 'sw':
+                    element.width = Math.max(20, element.width - deltaX);
+                    element.height = Math.max(20, element.height + deltaY);
+                    element.x = Math.max(0, element.x + deltaX);
+                    break;
+                case 'ne':
+                    element.width = Math.max(20, element.width + deltaX);
+                    element.height = Math.max(20, element.height - deltaY);
+                    element.y = Math.max(0, element.y + deltaY);
+                    break;
+                case 'nw':
+                    element.width = Math.max(20, element.width - deltaX);
+                    element.height = Math.max(20, element.height - deltaY);
+                    element.x = Math.max(0, element.x + deltaX);
+                    element.y = Math.max(0, element.y + deltaY);
+                    break;
+            }
+            
+            // Maintain aspect ratio with Shift
+            if (event.shiftKey) {
+                const aspectRatio = element.width / element.height;
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    element.height = element.width / aspectRatio;
+                } else {
+                    element.width = element.height * aspectRatio;
+                }
+            }
+        }
+    }
+    
+    // Selection Management
+    selectElement(element) {
+        this.selectedElements = [element];
+        this.requestRender();
+    }
+    
+    toggleSelection(element) {
+        const index = this.selectedElements.indexOf(element);
+        if (index > -1) {
+            this.selectedElements.splice(index, 1);
+        } else {
+            this.selectedElements.push(element);
+        }
+        this.requestRender();
+    }
+    
+    clearSelection() {
+        this.selectedElements = [];
+        this.requestRender();
+    }
+    
+    selectAll() {
+        this.selectedElements = [...this.elements];
+        this.requestRender();
+    }
+    
+    deleteSelected() {
+        if (this.selectedElements.length > 0) {
+            // Remove connections that involve selected elements
+            this.connections = this.connections.filter(conn => 
+                !this.selectedElements.includes(conn.startElement) && 
+                !this.selectedElements.includes(conn.endElement)
+            );
+            
+            // Remove selected elements
+            this.selectedElements.forEach(element => {
+                const index = this.elements.indexOf(element);
+                if (index > -1) {
+                    this.elements.splice(index, 1);
+                }
+            });
+            
+            this.clearSelection();
             this.saveState();
+            this.requestRender();
+            this.updateUI();
         }
     }
     
-    // History management
-    saveState() {
-        const state = JSON.stringify({
-            elements: this.elements,
-            connections: this.connections
-        });
-        this.history = this.history.slice(0, this.historyIndex + 1);
-        this.history.push(state);
-        this.historyIndex++;
-        
-        // Limit history size
-        if (this.history.length > 50) {
-            this.history.shift();
-            this.historyIndex--;
-        }
-    }
-    
-    undo() {
-        if (this.historyIndex > 0) {
-            this.historyIndex--;
-            const state = JSON.parse(this.history[this.historyIndex]);
-            this.elements = state.elements;
-            this.connections = state.connections;
-            this.selectedElement = null;
-            this.updatePropertiesPanel();
-            this.render();
-        }
-    }
-    
-    redo() {
-        if (this.historyIndex < this.history.length - 1) {
-            this.historyIndex++;
-            const state = JSON.parse(this.history[this.historyIndex]);
-            this.elements = state.elements;
-            this.connections = state.connections;
-            this.selectedElement = null;
-            this.updatePropertiesPanel();
-            this.render();
-        }
-    }
-    
-    // Zoom operations
-    zoomIn() {
-        this.zoom = Math.min(this.zoom * 1.2, 3);
-        this.render();
-    }
-    
-    zoomOut() {
-        this.zoom = Math.max(this.zoom / 1.2, 0.1);
-        this.render();
-    }
-    
-    resetZoom() {
-        this.zoom = 1;
-        this.panX = 0;
-        this.panY = 0;
-        this.render();
-    }
-}
-
-// UIHeader component - Persistent methodology display
-class UIHeader {
-    constructor() {
-        this.currentMode = 'manual';
-        this.headerElement = null;
-        this.methodologySelect = document.getElementById('methodologySelect');
-        
-        this.init();
-    }
-    
-    init() {
-        this.createHeader();
-        this.updateHeader();
-        this.setupEventListeners();
-    }
-    
-    createHeader() {
-        // Remove any existing header
-        const existingHeader = document.getElementById('uiHeader');
-        if (existingHeader) {
-            existingHeader.remove();
-        }
-        
-        // Create new header element
-        this.headerElement = document.createElement('div');
-        this.headerElement.id = 'uiHeader';
-        this.headerElement.className = 'ui-header';
-        
-        // Add to body
-        document.body.appendChild(this.headerElement);
-    }
-    
-    setupEventListeners() {
-        // Listen for methodology changes
-        if (this.methodologySelect) {
-            this.methodologySelect.addEventListener('change', (e) => {
-                this.setMode(e.target.value);
-            });
-        }
-    }
-    
-    setMode(mode) {
-        this.currentMode = mode;
-        this.updateHeader();
-    }
-    
-    updateHeader() {
-        if (!this.headerElement) return;
-        
-        const methodologyConfig = {
-            manual: {
-                icon: '⚙️',
-                text: 'Manual',
-                subtitle: 'Free-form'
-            },
-            tdd: {
-                icon: '🔴',
-                text: 'TDD',
-                subtitle: 'Red-Green-Refactor'
-            },
-            bdd: {
-                icon: '🟢',
-                text: 'BDD',
-                subtitle: 'Given-When-Then'
-            },
-            ddd: {
-                icon: '🏗️',
-                text: 'DDD',
-                subtitle: 'Domain-Driven'
-            },
-            sdd: {
-                icon: '📋',
-                text: 'SDD',
-                subtitle: 'Specification-Driven'
-            }
-        };
-        
-        const config = methodologyConfig[this.currentMode] || methodologyConfig.manual;
-        
-        // Update header class for styling
-        this.headerElement.className = `ui-header ${this.currentMode}`;
-        
-        // Update header content
-        this.headerElement.innerHTML = `
-            <div class="ui-header-content">
-                <span class="ui-header-icon">${config.icon}</span>
-                <span class="ui-header-text">${config.text}</span>
-                <span class="ui-header-subtitle">${config.subtitle}</span>
-            </div>
-        `;
-    }
-    
-    updatePosition(position) {
-        if (!this.headerElement) return;
-        
-        this.headerElement.style.top = `${position.y}px`;
-        this.headerElement.style.right = `${20}px`; // Always keep 20px from right edge
-    }
-    
-    applyTheme() {
-        // Theme is applied via CSS classes based on current mode
-        this.updateHeader();
-    }
-    
-    render(mode) {
-        if (mode && mode !== this.currentMode) {
-            this.setMode(mode);
-        }
-        // Header is always visible, no need to show/hide
-    }
-}
-
-// Methodology functionality
-class MethodologyManager {
-    constructor() {
-        this.modal = document.getElementById('methodologyModal');
-        this.modalTitle = document.getElementById('modalTitle');
-        this.modalContent = document.getElementById('methodologyContent');
-        this.methodologySelect = document.getElementById('methodologySelect');
-        this.viewMethodologyBtn = document.getElementById('viewMethodologyBtn');
-        this.closeModal = document.getElementById('closeModal');
-        this.closeModalBtn = document.getElementById('closeModalBtn');
-        
-        // Initialize UIHeader
-        this.uiHeader = new UIHeader();
-        
-        this.setupEventListeners();
-    }
-    
-    setupEventListeners() {
-        this.viewMethodologyBtn.addEventListener('click', () => {
-            this.showMethodology();
-        });
-        
-        this.closeModal.addEventListener('click', () => {
-            this.hideModal();
-        });
-        
-        this.closeModalBtn.addEventListener('click', () => {
-            this.hideModal();
-        });
-        
-        // Close modal when clicking outside
-        this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
-                this.hideModal();
-            }
-        });
-        
-        // Close modal with Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.modal.style.display === 'block') {
-                this.hideModal();
-            }
-        });
-        
-        // Listen for methodology changes
-        this.methodologySelect.addEventListener('change', () => {
-            this.updateMethodologyTitle();
-        });
-        
-        // Initialize methodology title on load
-        this.updateMethodologyTitle();
-    }
-    
-    async showMethodology() {
-        const selectedMethodology = this.methodologySelect.value;
-        const methodologyNames = {
-            'manual': 'Manual Development',
-            'tdd': 'Test-Driven Development (TDD)',
-            'bdd': 'Behavior-Driven Development (BDD)',
-            'ddd': 'Domain-Driven Design (DDD)',
-            'sdd': 'Specification-Driven Development (SDD)'
-        };
-        
-        this.modalTitle.textContent = methodologyNames[selectedMethodology];
-        
-        // Show loading state
-        this.modalContent.innerHTML = '<div class="loading">Loading methodology content...</div>';
-        this.modal.style.display = 'block';
-        
-        try {
-            const response = await fetch(`db/${selectedMethodology}.md`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const markdown = await response.text();
-            
-            if (!markdown.trim()) {
-                throw new Error('Empty content received');
-            }
-            
-            this.modalContent.innerHTML = this.parseMarkdown(markdown);
-            
-            // Update BDD title display if BDD is selected
-            if (selectedMethodology === 'bdd') {
-                this.updateBDDTitle();
-            }
-            
-        } catch (error) {
-            console.error('Error loading methodology:', error);
-            this.modalContent.innerHTML = `
-                <div class="error-message">
-                    <h3>⚠️ Error Loading Content</h3>
-                    <p>Failed to load ${methodologyNames[selectedMethodology]} content.</p>
-                    <p class="error-details">Error: ${error.message}</p>
-                    <button onclick="location.reload()" class="retry-btn">Retry</button>
-                </div>
-            `;
-        }
-    }
-    
-    hideModal() {
-        this.modal.style.display = 'none';
-        // Remove BDD title when modal is closed
-        this.removeBDDTitle();
-    }
-    
-    updateBDDTitle() {
-        // Remove existing BDD title if any
-        this.removeBDDTitle();
-        
-        // Create BDD title element
-        const bddTitle = document.createElement('div');
-        bddTitle.id = 'bddTitle';
-        bddTitle.className = 'bdd-title';
-        bddTitle.innerHTML = `
-            <div class="bdd-title-content">
-                <span class="bdd-icon">🟢</span>
-                <span class="bdd-text">BDD Mode</span>
-                <span class="bdd-subtitle">Given-When-Then</span>
-            </div>
-        `;
-        
-        // Add to top right corner of the page
-        document.body.appendChild(bddTitle);
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            this.removeBDDTitle();
-        }, 5000);
-    }
-    
-    removeBDDTitle() {
-        const existingTitle = document.getElementById('bddTitle');
-        if (existingTitle) {
-            existingTitle.remove();
-        }
-    }
-    
-    updateMethodologyTitle() {
-        // Remove any existing methodology titles
-        this.removeBDDTitle();
-        this.removeTDDTitle();
-        
-        const selectedMethodology = this.methodologySelect.value;
-        
-        // Show TDD title if TDD is selected
-        if (selectedMethodology === 'tdd') {
-            this.updateTDDTitle();
-        }
-    }
-    
-    updateTDDTitle() {
-        // Remove existing TDD title if any
-        this.removeTDDTitle();
-        
-        // Create TDD title element
-        const tddTitle = document.createElement('div');
-        tddTitle.id = 'tddTitle';
-        tddTitle.className = 'tdd-title';
-        tddTitle.innerHTML = `
-            <div class="tdd-title-content">
-                <span class="tdd-icon">🔴</span>
-                <span class="tdd-text">TDD</span>
-                <span class="tdd-subtitle">Red-Green-Refactor</span>
-            </div>
-        `;
-        
-        // Add to top right corner of the page
-        document.body.appendChild(tddTitle);
-    }
-    
-    removeTDDTitle() {
-        const existingTitle = document.getElementById('tddTitle');
-        if (existingTitle) {
-            existingTitle.remove();
-        }
-    }
-    
-    parseMarkdown(markdown) {
-        if (!markdown || typeof markdown !== 'string') {
-            return '<p>No content available</p>';
-        }
-        
-        try {
-            // Escape HTML first to prevent XSS
-            const escapeHtml = (text) => {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            };
-            
-            // Split into lines for better processing
-            const lines = markdown.split('\n');
-            const processedLines = [];
-            let inCodeBlock = false;
-            let codeBlockContent = [];
-            let codeBlockLanguage = '';
-            
-            for (let i = 0; i < lines.length; i++) {
-                let line = lines[i];
-                
-                // Handle code blocks
-                if (line.startsWith('```')) {
-                    if (!inCodeBlock) {
-                        inCodeBlock = true;
-                        codeBlockLanguage = line.substring(3).trim();
-                        codeBlockContent = [];
-                    } else {
-                        inCodeBlock = false;
-                        const codeContent = codeBlockContent.join('\n');
-                        processedLines.push(`<pre><code class="language-${codeBlockLanguage}">${escapeHtml(codeContent)}</code></pre>`);
-                        codeBlockContent = [];
-                        codeBlockLanguage = '';
-                    }
-                    continue;
-                }
-                
-                if (inCodeBlock) {
-                    codeBlockContent.push(line);
-                    continue;
-                }
-                
-                // Process headers
-                if (line.startsWith('#### ')) {
-                    processedLines.push(`<h4>${escapeHtml(line.substring(5))}</h4>`);
-                } else if (line.startsWith('### ')) {
-                    processedLines.push(`<h3>${escapeHtml(line.substring(4))}</h3>`);
-                } else if (line.startsWith('## ')) {
-                    processedLines.push(`<h2>${escapeHtml(line.substring(3))}</h2>`);
-                } else if (line.startsWith('# ')) {
-                    processedLines.push(`<h1>${escapeHtml(line.substring(2))}</h1>`);
-                }
-                // Process lists
-                else if (line.match(/^\s*[-*+]\s+/)) {
-                    const content = line.replace(/^\s*[-*+]\s+/, '');
-                    processedLines.push(`<li>${this.processInlineMarkdown(content)}</li>`);
-                } else if (line.match(/^\s*\d+\.\s+/)) {
-                    const content = line.replace(/^\s*\d+\.\s+/, '');
-                    processedLines.push(`<li>${this.processInlineMarkdown(content)}</li>`);
-                }
-                // Process regular paragraphs
-                else if (line.trim()) {
-                    processedLines.push(`<p>${this.processInlineMarkdown(line)}</p>`);
-                }
-                // Empty lines
-                else {
-                    processedLines.push('<br>');
-                }
-            }
-            
-            // Group consecutive list items
-            let html = processedLines.join('\n');
-            html = html.replace(/(<li>.*?<\/li>\s*)+/gs, (match) => {
-                return `<ul>${match}</ul>`;
+    duplicateSelected() {
+        if (this.selectedElements.length > 0) {
+            const duplicates = [];
+            this.selectedElements.forEach(element => {
+                const duplicate = { ...element };
+                duplicate.x += 20;
+                duplicate.y += 20;
+                this.elements.push(duplicate);
+                duplicates.push(duplicate);
             });
             
-            return html;
-            
-        } catch (error) {
-            console.error('Error parsing markdown:', error);
-            return `<p>Error parsing content: ${error.message}</p>`;
+            this.selectedElements = duplicates;
+            this.saveState();
+            this.requestRender();
         }
     }
     
-    processInlineMarkdown(text) {
-        if (!text) return '';
-        
-        try {
-            return text
-                // Bold
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                // Italic
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                // Inline code
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
-                // Links (basic support)
-                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-        } catch (error) {
-            console.error('Error processing inline markdown:', error);
-            return text;
-        }
-    }
-}
-
-// Initialize the application when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new DiagrammingInterface();
-    new MethodologyManager();
-});
+    // Utility Functions
+    getElementAt(x, y) {
+        // Check in reverse order (top to bottom)
+        for (let i = this.elements.length - 1; i >= 0; i--) {
+            const element = this.elements[i

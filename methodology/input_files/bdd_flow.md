@@ -87,6 +87,7 @@ Scenario: No manager action within SLA
 **Flow Title:** Expense Reimbursement  
 **Methodology:** BDD  
 **Diagram Type:** Flowchart  
+**Diagram Layout:** Horizontal  
 **Primary Outcomes:** `Paid (Scheduled)`, `Rejected`, `Needs Receipt`  
 **Timers:** `Manager Review SLA = 7 days` (escalate to delegate; notify Finance)
 
@@ -97,7 +98,11 @@ Scenario: No manager action within SLA
 
 **Step 1 — Submit Claim**  
 - *When* the employee submits a claim.  
-- *Then* proceed to **Validate Claim**.
+- *Then* proceed to **Duplicate Check**.
+
+**Decision — Duplicate submission?**  
+- If **Yes** then **De-duplicate** (keep latest) and **re-validate**, then proceed to **Validate Claim**.  
+- If **No** then proceed to **Validate Claim**.
 
 **Step 2 — Validate Claim**  
 - *Then* evaluate the business rules:  
@@ -107,26 +112,19 @@ Scenario: No manager action within SLA
   - Over-limit > $200 is not reimbursable
 
 **Branch A — Validation: Missing Receipt**  
-- *If* amount ≥ $50 **and** no receipt is attached,  
-- *Outcome →* **Needs Receipt**: notify the employee to attach a receipt, *and end the flow*.
+- If **Yes** then *Outcome →* **Needs Receipt** (notify the employee; end the flow).  
+- If **No** then proceed to **Branch B — Validation: Other Failures**.
 
 **Branch B — Validation: Other Failures**  
-- *If* validation fails for any other rule (e.g., over-limit, invalid category, negative total, late submission),  
-- *Outcome →* **Rejected**: notify the employee with reason, *and end the flow*.
-
-**Branch C — Validation: Passed**  
-- *If* validation passes,  
-- *Then* route to **Manager Review** and **start the SLA timer (7 days)**.
+- If **Yes** then *Outcome →* **Rejected** (notify with reason; end the flow).  
+- If **No** then proceed to **Manager Review** (start **SLA timer = 7 days**).
 
 **Step 3 — Manager Review (SLA 7d)**  
 - *When* the manager reviews the claim, they **Approve** or **Reject**.
 
 **Decision — Approved?**  
-- *If* **Approved**,  
-  - *Then* **Schedule Payment** within **≤ 5 business days** (shift to the next business day if weekend/holiday).  
-  - *Outcome →* **Paid (Scheduled)**, *and end the flow*.  
-- *If* **Rejected**,  
-  - *Outcome →* **Rejected**: notify the employee with reason, *and end the flow*.
+- If **Yes** then **Schedule Payment** within **≤ 5 business days** (shift to the next business day if weekend/holiday), then *Outcome →* **Paid (Scheduled)** (end the flow).  
+- If **No** then *Outcome →* **Rejected** (notify the employee with reason; end the flow).
 
 ### Escalation (SLA)
 - *If* no manager action occurs within **7 days**,  
@@ -134,15 +132,18 @@ Scenario: No manager action within SLA
   - The claim remains in **Manager Review** until a decision is made.
 
 ### De-duplication
-- *If* a duplicate submission (same `employeeId + date + amount`) occurs,  
-  - *Then* de-duplicate and keep the latest version before re-validating.
+- Implemented via **Decision — Duplicate submission?** in the Behavior Flow:  
+  - If **Yes** then de-duplicate (keep latest) and re-validate before continuing to **Validate Claim**.  
+  - If **No** then proceed directly to **Validate Claim**.
 
 ### Payout Calendar Note
 - Payments scheduled on weekends/holidays move to the **next business day**.
 
 ### Parser Hints (for the app)
-- Treat lines starting with **“Step”** as nodes.  
-- Treat **“Branch”** and **“Decision”** as decision nodes.  
+- Treat lines starting with **“Step”** as process nodes.  
+- Treat **“Branch …”** and **“Decision …”** as decision nodes.  
 - **“When … Then …”** pairs imply directed edges.  
 - **“Outcome → …”** implies a terminal node (end state).  
-- **“SLA …”** and **“Escalation …”** define timers and side-effects on the **Manager Review** node.
+- **“SLA …”** and **“Escalation …”** define timers and side-effects on the **Manager Review** node.  
+- To force **Yes/No edge labels**, write branches as: **`If Yes then <Target>`** and **`If No then <Target>`**.  
+- **Diagram Layout: Horizontal** forces Mermaid header to `flowchart LR`.

@@ -21,6 +21,7 @@
         <div class="toolbar-section">
             <button id="newBtn" title="New Diagram">📄 New</button>
             <button id="importBtn" title="Import BDD Markdown">📥 Import MD</button>
+            <button id="renderBtn" title="Render Diagram from Imported Data">🎨 Render Diagram</button>
             <button id="saveBtn" title="Save Diagram">💾 Save</button>
             <button id="exportBtn" title="Export Options">📤 Export</button>
         </div>
@@ -323,14 +324,9 @@
             <div class="modal-body">
                 <div class="import-options">
                     <div class="import-method">
-                        <h3>Upload Files</h3>
+                        <h3>Upload Markdown Files</h3>
                         <input type="file" id="fileInput" multiple accept=".md,.txt" />
-                        <p class="help-text">Select bdd_flow.md and bdd_seq.md files</p>
-                    </div>
-                    
-                    <div class="import-method">
-                        <h3>Paste Markdown</h3>
-                        <textarea id="markdownInput" rows="10" placeholder="Paste your BDD markdown here..."></textarea>
+                        <p class="help-text">Select .md files containing BDD flow or sequence diagrams</p>
                         <div class="markdown-options">
                             <label>
                                 <input type="radio" name="diagramType" value="flow" checked>
@@ -373,9 +369,10 @@
                 <div class="export-options">
                     <div class="export-format">
                         <h3>Format</h3>
-                        <label><input type="radio" name="exportFormat" value="json" checked> JSON (Native)</label>
-                        <label><input type="radio" name="exportFormat" value="markdown"> Methodology MD (Normalized)</label>
+                        <label><input type="radio" name="exportFormat" value="mermaid" checked> Mermaid Syntax (.md)</label>
+                        <label><input type="radio" name="exportFormat" value="markdown"> Human-Readable MD</label>
                         <label><input type="radio" name="exportFormat" value="png"> PNG Image</label>
+                        <label><input type="radio" name="exportFormat" value="json"> JSON (Native)</label>
                         <label><input type="radio" name="exportFormat" value="svg"> SVG Vector</label>
                     </div>
                     

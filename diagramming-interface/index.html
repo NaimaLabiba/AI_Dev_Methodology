@@ -3,33 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diagramming Interface</title>
+    <title>BDD Diagramming Interface</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- BDD Methodology Header (Fixed Top-Right) -->
+    <div id="methodologyHeader" class="methodology-header">
+        <span class="methodology-text">BDD</span>
+    </div>
+
     <!-- Top Toolbar -->
     <div class="toolbar">
-        <button id="newBtn" title="New Diagram">📄 New</button>
-        <button id="saveBtn" title="Save Diagram">💾 Save</button>
-        <button id="exportBtn" title="Export as PNG">📤 Export</button>
-        <div class="separator"></div>
-        <button id="undoBtn" title="Undo">↶ Undo</button>
-        <button id="redoBtn" title="Redo">↷ Redo</button>
-        <div class="separator"></div>
-        <button id="zoomInBtn" title="Zoom In">🔍+ </button>
-        <button id="zoomOutBtn" title="Zoom Out">🔍- </button>
-        <button id="resetZoomBtn" title="Reset Zoom">100%</button>
-        <div class="separator"></div>
-        <div class="methodology-selector">
-            <label for="methodologySelect">Methodology:</label>
-            <select id="methodologySelect">
-                <option value="manual">Manual</option>
-                <option value="tdd">TDD</option>
-                <option value="bdd">BDD</option>
-                <option value="ddd">DDD</option>
-                <option value="sdd">SDD</option>
-            </select>
-            <button id="viewMethodologyBtn" title="View Methodology Details">📖 View</button>
+        <div class="toolbar-section">
+            <button id="importBtn" title="Import (Ctrl+I)">📥 Import</button>
+            <button id="exportBtn" title="Export">📤 Export</button>
+        </div>
+        
+        <div class="toolbar-separator"></div>
+        
+        <div class="toolbar-section">
+            <button id="undoBtn" title="Undo (Ctrl+Z)">↶ Undo</button>
+            <button id="redoBtn" title="Redo (Ctrl+Y)">↷ Redo</button>
+            <button id="deleteBtn" title="Delete (Del)">🗑 Delete</button>
+        </div>
+        
+        <div class="toolbar-separator"></div>
+        
+        <div class="toolbar-section">
+            <button id="zoomInBtn" title="Zoom In">🔍+</button>
+            <button id="zoomOutBtn" title="Zoom Out">🔍-</button>
+            <span id="zoomLevel">100%</span>
         </div>
     </div>
 
@@ -37,57 +40,82 @@
     <div class="main-container">
         <!-- Left Toolbox Panel -->
         <div class="toolbox-panel">
-            <h3>Shapes</h3>
-            <div class="shape-category">
-                <h4>Basic Shapes</h4>
-                <div class="shape-grid">
-                    <div class="shape-item" data-shape="rectangle" draggable="true">
-                        <div class="shape-preview rectangle-preview"></div>
-                        <span>Rectangle</span>
-                    </div>
-                    <div class="shape-item" data-shape="circle" draggable="true">
-                        <div class="shape-preview circle-preview"></div>
-                        <span>Circle</span>
-                    </div>
-                    <div class="shape-item" data-shape="diamond" draggable="true">
-                        <div class="shape-preview diamond-preview"></div>
-                        <span>Diamond</span>
-                    </div>
-                    <div class="shape-item" data-shape="triangle" draggable="true">
-                        <div class="shape-preview triangle-preview"></div>
-                        <span>Triangle</span>
-                    </div>
-                </div>
+            <div class="panel-header">
+                <h3>Tools</h3>
             </div>
             
-            <div class="shape-category">
-                <h4>Flowchart</h4>
-                <div class="shape-grid">
-                    <div class="shape-item" data-shape="process" draggable="true">
-                        <div class="shape-preview process-preview"></div>
-                        <span>Process</span>
-                    </div>
-                    <div class="shape-item" data-shape="decision" draggable="true">
-                        <div class="shape-preview decision-preview"></div>
-                        <span>Decision</span>
-                    </div>
-                    <div class="shape-item" data-shape="start-end" draggable="true">
-                        <div class="shape-preview start-end-preview"></div>
-                        <span>Start/End</span>
+            <div class="panel-content">
+                <div class="tool-section">
+                    <h4>Selection & Navigation</h4>
+                    <div class="tool-grid">
+                        <button class="tool-btn active" data-tool="select" title="Select">
+                            <span class="tool-icon">↖</span>
+                            <span>Select</span>
+                        </button>
+                        <button class="tool-btn" data-tool="pan" title="Pan (Space)">
+                            <span class="tool-icon">✋</span>
+                            <span>Pan</span>
+                        </button>
                     </div>
                 </div>
-            </div>
-
-            <div class="shape-category">
-                <h4>Tools</h4>
-                <div class="shape-grid">
-                    <div class="shape-item" data-shape="text" draggable="true">
-                        <div class="shape-preview text-preview">T</div>
-                        <span>Text</span>
+                
+                <div class="tool-section">
+                    <h4>Shapes</h4>
+                    <div class="tool-grid">
+                        <button class="tool-btn" data-tool="rectangle" title="Rectangle">
+                            <span class="tool-icon">▭</span>
+                            <span>Rectangle</span>
+                        </button>
+                        <button class="tool-btn" data-tool="ellipse" title="Ellipse">
+                            <span class="tool-icon">○</span>
+                            <span>Ellipse</span>
+                        </button>
+                        <button class="tool-btn" data-tool="diamond" title="Diamond">
+                            <span class="tool-icon">◇</span>
+                            <span>Diamond</span>
+                        </button>
+                        <button class="tool-btn" data-tool="text" title="Text">
+                            <span class="tool-icon">T</span>
+                            <span>Text</span>
+                        </button>
                     </div>
-                    <div class="shape-item" data-shape="arrow" draggable="true">
-                        <div class="shape-preview arrow-preview">→</div>
-                        <span>Arrow</span>
+                </div>
+                
+                <div class="tool-section">
+                    <h4>Connections</h4>
+                    <div class="tool-grid">
+                        <button class="tool-btn" data-tool="line" title="Line (plain)">
+                            <span class="tool-icon">—</span>
+                            <span>Line</span>
+                        </button>
+                        <button class="tool-btn" data-tool="connector" title="Connector (arrow)">
+                            <span class="tool-icon">→</span>
+                            <span>Connector</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="tool-section">
+                    <h4>Flow Elements</h4>
+                    <div class="tool-grid">
+                        <button class="tool-btn" data-tool="start" title="Start Node">
+                            <span class="tool-icon">⚪</span>
+                            <span>Start</span>
+                        </button>
+                        <button class="tool-btn" data-tool="end" title="End Node">
+                            <span class="tool-icon">⚫</span>
+                            <span>End</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="tool-section">
+                    <h4>Diagram Actions</h4>
+                    <div class="tool-grid">
+                        <button id="renderDiagramBtn" class="tool-btn special-btn" title="Render Diagram from Markdown">
+                            <span class="tool-icon">🎨</span>
+                            <span>Render Diagram</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -96,87 +124,90 @@
         <!-- Center Canvas Area -->
         <div class="canvas-container">
             <div class="canvas-wrapper">
-                <canvas id="diagramCanvas" width="1200" height="800"></canvas>
+                <canvas id="diagramCanvas" width="6000" height="4000"></canvas>
                 <div class="canvas-overlay" id="canvasOverlay"></div>
             </div>
-            <div class="canvas-info">
-                <span id="canvasInfo">Ready | Zoom: 100%</span>
-            </div>
-        </div>
-
-        <!-- Right Properties Panel -->
-        <div class="properties-panel">
-            <h3>Properties</h3>
-            <div class="property-section" id="noSelection">
-                <p>Select an element to edit its properties</p>
-            </div>
             
-            <div class="property-section" id="elementProperties" style="display: none;">
-                <div class="property-group">
-                    <label>Fill Color:</label>
-                    <input type="color" id="fillColor" value="#ffffff">
-                </div>
-                
-                <div class="property-group">
-                    <label>Border Color:</label>
-                    <input type="color" id="borderColor" value="#000000">
-                </div>
-                
-                <div class="property-group">
-                    <label>Border Width:</label>
-                    <input type="range" id="borderWidth" min="1" max="10" value="2">
-                    <span id="borderWidthValue">2px</span>
-                </div>
-                
-                <div class="property-group">
-                    <label>Text:</label>
-                    <textarea id="elementText" rows="3" placeholder="Enter text..."></textarea>
-                </div>
-                
-                <div class="property-group">
-                    <label>Font Size:</label>
-                    <input type="range" id="fontSize" min="8" max="48" value="14">
-                    <span id="fontSizeValue">14px</span>
-                </div>
-                
-                <div class="property-group">
-                    <label>Position:</label>
-                    <div class="position-inputs">
-                        <input type="number" id="posX" placeholder="X">
-                        <input type="number" id="posY" placeholder="Y">
-                    </div>
-                </div>
-                
-                <div class="property-group">
-                    <label>Size:</label>
-                    <div class="size-inputs">
-                        <input type="number" id="width" placeholder="Width">
-                        <input type="number" id="height" placeholder="Height">
-                    </div>
-                </div>
-                
-                <div class="property-actions">
-                    <button class="property-btn delete-btn" id="deleteElement">Delete</button>
-                    <button class="property-btn" id="duplicateElement">Duplicate</button>
-                </div>
+            <div class="canvas-info">
+                <span id="canvasInfo">Ready | Elements: 0 | Zoom: 100%</span>
             </div>
         </div>
     </div>
 
-    <!-- Methodology Modal -->
-    <div id="methodologyModal" class="modal">
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle">Development Methodology</h2>
-                <span class="close" id="closeModal">&times;</span>
+                <h2>Import Markdown File</h2>
+                <span class="close" id="closeImportModal">&times;</span>
             </div>
             <div class="modal-body">
-                <div id="methodologyContent">
-                    <!-- Methodology content will be loaded here -->
+                <div class="import-section">
+                    <h3>Upload File</h3>
+                    <input type="file" id="fileInput" accept=".md" />
+                    <p class="help-text">Select a .md file to import</p>
+                </div>
+                
+                <div class="import-section">
+                    <h3>Paste Markdown</h3>
+                    <textarea id="markdownInput" rows="10" placeholder="Paste your markdown content here..."></textarea>
+                </div>
+                
+                <div id="importPreview" class="import-preview" style="display: none;">
+                    <h3>Preview</h3>
+                    <div id="previewContent"></div>
+                </div>
+                
+                <div id="importWarnings" class="import-warnings" style="display: none;">
+                    <h3>⚠️ Warnings</h3>
+                    <ul id="warningsList"></ul>
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="closeModalBtn">Close</button>
+                <button id="previewImportBtn">Preview</button>
+                <button id="confirmImportBtn" disabled>Import</button>
+                <button id="cancelImportBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Export Diagram</h2>
+                <span class="close" id="closeExportModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="export-options">
+                    <div class="export-format">
+                        <h3>Format</h3>
+                        <label><input type="radio" name="exportFormat" value="markdown" checked> Markdown (.md)</label>
+                        <label><input type="radio" name="exportFormat" value="json"> JSON (Native)</label>
+                        <label><input type="radio" name="exportFormat" value="png"> PNG Image</label>
+                        <label><input type="radio" name="exportFormat" value="svg"> SVG Vector</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmExportBtn">Export</button>
+                <button id="cancelExportBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Edit Modal -->
+    <div id="textEditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Text</h2>
+            </div>
+            <div class="modal-body">
+                <textarea id="textEditInput" rows="3" placeholder="Enter text..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="saveTextBtn">Save</button>
+                <button id="cancelTextBtn">Cancel</button>
             </div>
         </div>
     </div>

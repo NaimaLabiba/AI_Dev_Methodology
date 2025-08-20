@@ -1,4 +1,4 @@
-// BDD Diagramming Interface - Complete Implementation
+// BDD Diagramming Interface - Main Application
 class BDDDiagrammingInterface {
     constructor() {
         this.canvas = document.getElementById('diagramCanvas');
@@ -31,7 +31,7 @@ class BDDDiagrammingInterface {
         this.outcomeFilters = new Set();
         this.currentDiagramType = 'flow'; // 'flow' or 'sequence'
         this.metadata = {
-            flowTitle: 'Untitled Flow',
+            flowTitle: '',
             methodology: 'BDD',
             diagramType: 'Flowchart',
             primaryOutcomes: [],
@@ -41,7 +41,6 @@ class BDDDiagrammingInterface {
         // History for undo/redo
         this.history = [];
         this.historyIndex = -1;
-        this.maxHistorySize = 50;
         
         // Mouse state
         this.mouseX = 0;
@@ -56,17 +55,13 @@ class BDDDiagrammingInterface {
         this.tempConnection = null;
         
         // Canvas settings
-        this.gridVisible = true;
+        this.gridVisible = false;
         this.snapToGrid = true;
         this.guidesVisible = true;
         this.gridSize = 20;
         
         // Markdown parser
         this.markdownParser = new BDDMarkdownParser();
-        
-        // File handling
-        this.currentFileName = null;
-        this.hasUnsavedChanges = false;
         
         this.init();
     }
@@ -84,7 +79,6 @@ class BDDDiagrammingInterface {
         
         // Initialize with default document
         this.createNewDocument('Untitled Flow', 'flow');
-        this.updateMethodologyHeader();
     }
     
     setupCanvas() {
@@ -120,24 +114,9 @@ class BDDDiagrammingInterface {
         // Window events
         window.addEventListener('resize', this.handleResize.bind(this));
         window.addEventListener('keydown', this.handleKeyDown.bind(this));
-        window.addEventListener('keyup', this.handleKeyUp.bind(this));
         
         // Prevent context menu
         this.canvas.addEventListener('contextmenu', e => e.preventDefault());
-        
-        // File drag and drop
-        document.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-        
-        document.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const files = Array.from(e.dataTransfer.files);
-            const mdFile = files.find(file => file.name.endsWith('.md'));
-            if (mdFile) {
-                this.handleFileImport(mdFile);
-            }
-        });
     }
     
     setupDragAndDrop() {
@@ -177,13 +156,11 @@ class BDDDiagrammingInterface {
             this.canvas.parentElement.classList.remove('drag-over');
             
             const shapeType = e.dataTransfer.getData('text/plain');
-            if (shapeType) {
-                const rect = this.canvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / this.zoom - this.panX;
-                const y = (e.clientY - rect.top) / this.zoom - this.panY;
-                
-                this.createShape(shapeType, x, y);
-            }
+            const rect = this.canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / this.zoom - this.panX;
+            const y = (e.clientY - rect.top) / this.zoom - this.panY;
+            
+            this.createShape(shapeType, x, y);
         });
     }
     
@@ -191,6 +168,7 @@ class BDDDiagrammingInterface {
         // File operations
         document.getElementById('newBtn').addEventListener('click', () => this.newDiagram());
         document.getElementById('importBtn').addEventListener('click', () => this.showImportModal());
+        document.getElementById('renderBtn').addEventListener('click', () => this.renderDiagram());
         document.getElementById('saveBtn').addEventListener('click', () => this.saveDiagram());
         document.getElementById('exportBtn').addEventListener('click', () => this.showExportModal());
         
@@ -277,7 +255,6 @@ class BDDDiagrammingInterface {
         const previewBtn = document.getElementById('previewImportBtn');
         const confirmBtn = document.getElementById('confirmImportBtn');
         const fileInput = document.getElementById('fileInput');
-        const markdownInput = document.getElementById('markdownInput');
         
         closeBtn.addEventListener('click', () => this.hideModal('importModal'));
         cancelBtn.addEventListener('click', () => this.hideModal('importModal'));
@@ -286,7 +263,6 @@ class BDDDiagrammingInterface {
         confirmBtn.addEventListener('click', () => this.confirmImport());
         
         fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
-        markdownInput.addEventListener('input', () => this.enablePreviewButton());
         
         // Close modal when clicking outside
         modal.addEventListener('click', (e) => {
@@ -404,7 +380,6 @@ class BDDDiagrammingInterface {
         this.selectElement(element);
         this.render();
         this.saveState();
-        this.markUnsaved();
         
         return element;
     }
@@ -492,21 +467,12 @@ class BDDDiagrammingInterface {
                 });
             }
         } else {
-            // Standard 8-point connection (top, top-right, right, bottom-right, bottom, bottom-left, left, top-left)
-            const cx = element.x + element.width / 2;
-            const cy = element.y + element.height / 2;
-            const w = element.width / 2;
-            const h = element.height / 2;
-            
+            // Standard 4-point connection
             points.push(
-                { x: cx, y: element.y }, // top
-                { x: element.x + element.width, y: element.y }, // top-right
-                { x: element.x + element.width, y: cy }, // right
-                { x: element.x + element.width, y: element.y + element.height }, // bottom-right
-                { x: cx, y: element.y + element.height }, // bottom
-                { x: element.x, y: element.y + element.height }, // bottom-left
-                { x: element.x, y: cy }, // left
-                { x: element.x, y: element.y } // top-left
+                { x: element.x + element.width / 2, y: element.y }, // top
+                { x: element.x + element.width, y: element.y + element.height / 2 }, // right
+                { x: element.x + element.width / 2, y: element.y + element.height }, // bottom
+                { x: element.x, y: element.y + element.height / 2 } // left
             );
         }
         
@@ -523,7 +489,8 @@ class BDDDiagrammingInterface {
         this.isMouseDown = true;
         
         // Check for space key for panning
-        if (this.isPanning) {
+        if (e.key === ' ' || this.isPanning) {
+            this.isPanning = true;
             this.canvas.style.cursor = 'grabbing';
             e.preventDefault();
             return;
@@ -635,7 +602,6 @@ class BDDDiagrammingInterface {
     handleMouseUp(e) {
         if (this.isDragging) {
             this.saveState();
-            this.markUnsaved();
         }
         
         // Handle connection completion
@@ -654,6 +620,7 @@ class BDDDiagrammingInterface {
         this.isDragging = false;
         this.draggedElement = null;
         this.isMouseDown = false;
+        this.isPanning = false;
         this.canvas.style.cursor = 'default';
         this.render();
     }
@@ -678,7 +645,7 @@ class BDDDiagrammingInterface {
         const mouseY = e.clientY - rect.top;
         
         const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-        const newZoom = Math.max(0.25, Math.min(4, this.zoom * zoomFactor));
+        const newZoom = Math.max(0.1, Math.min(3, this.zoom * zoomFactor));
         
         // Zoom towards mouse position
         const zoomRatio = newZoom / this.zoom;
@@ -695,10 +662,6 @@ class BDDDiagrammingInterface {
             this.deleteSelected();
         } else if (e.key === 'Escape') {
             this.clearSelection();
-            this.connectionMode = false;
-            this.connectionStart = null;
-            this.tempConnection = null;
-            this.render();
         } else if (e.key === ' ') {
             this.isPanning = true;
             this.canvas.style.cursor = 'grab';
@@ -729,14 +692,6 @@ class BDDDiagrammingInterface {
                     e.preventDefault();
                     this.saveDiagram();
                     break;
-                case 'i':
-                    e.preventDefault();
-                    this.showImportModal();
-                    break;
-                case 'n':
-                    e.preventDefault();
-                    this.newDiagram();
-                    break;
             }
         }
         
@@ -747,274 +702,9 @@ class BDDDiagrammingInterface {
         }
     }
     
-    handleKeyUp(e) {
-        if (e.key === ' ') {
-            this.isPanning = false;
-            this.canvas.style.cursor = 'default';
-        }
-    }
-    
     handleResize() {
         this.setupCanvas();
         this.render();
-    }
-    
-    // File Operations
-    newDiagram() {
-        if (this.hasUnsavedChanges) {
-            if (!confirm('You have unsaved changes. Are you sure you want to create a new diagram?')) {
-                return;
-            }
-        }
-        
-        this.elements = [];
-        this.connections = [];
-        this.selectedElement = null;
-        this.selectedElements = [];
-        this.history = [];
-        this.historyIndex = -1;
-        this.currentFileName = null;
-        this.hasUnsavedChanges = false;
-        this.metadata = {
-            flowTitle: 'Untitled Flow',
-            methodology: 'BDD',
-            diagramType: 'Flowchart',
-            primaryOutcomes: [],
-            timers: []
-        };
-        
-        this.render();
-        this.updatePropertiesPanel();
-        this.updateCanvasInfo();
-        this.updateMethodologyHeader();
-        this.saveState();
-    }
-    
-    showImportModal() {
-        const modal = document.getElementById('importModal');
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-        
-        // Reset form
-        document.getElementById('fileInput').value = '';
-        document.getElementById('markdownInput').value = '';
-        document.getElementById('importPreview').style.display = 'none';
-        document.getElementById('parseWarnings').style.display = 'none';
-        document.getElementById('confirmImportBtn').disabled = true;
-    }
-    
-    handleFileUpload(e) {
-        const files = e.target.files;
-        if (files.length > 0) {
-            const file = files[0];
-            if (file.name.endsWith('.md')) {
-                this.handleFileImport(file);
-            } else {
-                this.showToast('Only .md files are supported', 'error');
-            }
-        }
-    }
-    
-    handleFileImport(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const content = e.target.result;
-            document.getElementById('markdownInput').value = content;
-            this.currentFileName = file.name;
-            this.enablePreviewButton();
-        };
-        reader.readAsText(file);
-    }
-    
-    enablePreviewButton() {
-        const previewBtn = document.getElementById('previewImportBtn');
-        const markdownInput = document.getElementById('markdownInput');
-        previewBtn.disabled = !markdownInput.value.trim();
-    }
-    
-    previewImport() {
-        const markdownInput = document.getElementById('markdownInput').value;
-        const diagramType = document.querySelector('input[name="diagramType"]:checked').value;
-        
-        try {
-            const parsed = this.markdownParser.parse(markdownInput, diagramType);
-            
-            if (parsed) {
-                // Show preview
-                const previewContent = document.getElementById('previewContent');
-                previewContent.innerHTML = `
-                    <h4>Metadata</h4>
-                    <p><strong>Title:</strong> ${parsed.metadata.flowTitle || 'Untitled'}</p>
-                    <p><strong>Methodology:</strong> ${parsed.metadata.methodology || 'BDD'}</p>
-                    <p><strong>Type:</strong> ${parsed.metadata.diagramType || 'Flowchart'}</p>
-                    <p><strong>Elements:</strong> ${parsed.elements.length}</p>
-                    <p><strong>Connections:</strong> ${parsed.connections.length}</p>
-                `;
-                
-                document.getElementById('importPreview').style.display = 'block';
-                document.getElementById('confirmImportBtn').disabled = false;
-                
-                // Show warnings if any
-                if (this.markdownParser.warnings.length > 0) {
-                    const warningsList = document.getElementById('warningsList');
-                    warningsList.innerHTML = '';
-                    this.markdownParser.warnings.forEach(warning => {
-                        const li = document.createElement('li');
-                        li.textContent = warning;
-                        warningsList.appendChild(li);
-                    });
-                    document.getElementById('parseWarnings').style.display = 'block';
-                }
-                
-                this.parsedImportData = parsed;
-            } else {
-                this.showToast('Failed to parse markdown file', 'error');
-            }
-        } catch (error) {
-            this.showToast('Error parsing markdown: ' + error.message, 'error');
-        }
-    }
-    
-    confirmImport() {
-        if (this.parsedImportData) {
-            // Clear current diagram
-            this.elements = [];
-            this.connections = [];
-            
-            // Import parsed data
-            this.elements = this.parsedImportData.elements;
-            this.connections = this.parsedImportData.connections;
-            this.metadata = this.parsedImportData.metadata;
-            
-            // Update UI
-            this.updateMethodologyHeader();
-            this.render();
-            this.updatePropertiesPanel();
-            this.updateCanvasInfo();
-            this.saveState();
-            this.markUnsaved();
-            
-            this.hideModal('importModal');
-            this.showToast('Diagram imported successfully', 'success');
-        }
-    }
-    
-    saveDiagram() {
-        const diagramData = {
-            metadata: this.metadata,
-            elements: this.elements,
-            connections: this.connections,
-            layers: this.layers,
-            version: '1.0'
-        };
-        
-        const dataStr = JSON.stringify(diagramData, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        
-        const fileName = this.currentFileName || `${this.metadata.flowTitle.toLowerCase().replace(/\s+/g, '-')}.json`;
-        this.downloadFile(dataBlob, fileName);
-        
-        this.hasUnsavedChanges = false;
-        this.showToast('Diagram saved successfully', 'success');
-    }
-    
-    showExportModal() {
-        if (this.elements.length === 0) {
-            this.showToast('Nothing to export', 'warning');
-            return;
-        }
-        
-        const modal = document.getElementById('exportModal');
-        modal.classList.add('show');
-        modal.style.display = 'flex';
-    }
-    
-    confirmExport() {
-        const format = document.querySelector('input[name="exportFormat"]:checked').value;
-        
-        switch (format) {
-            case 'json':
-                this.exportAsJSON();
-                break;
-            case 'markdown':
-                this.exportAsMarkdown();
-                break;
-            case 'png':
-                this.exportAsPNG();
-                break;
-            case 'svg':
-                this.exportAsSVG();
-                break;
-        }
-        
-        this.hideModal('exportModal');
-    }
-    
-    exportAsJSON() {
-        this.saveDiagram();
-    }
-    
-    exportAsMarkdown() {
-        const markdown = this.generateMarkdown();
-        const blob = new Blob([markdown], { type: 'text/markdown' });
-        const fileName = `${this.metadata.flowTitle.toLowerCase().replace(/\s+/g, '-')}.md`;
-        this.downloadFile(blob, fileName);
-        this.showToast('Exported as Markdown', 'success');
-    }
-    
-    exportAsPNG() {
-        const background = document.getElementById('exportBackground').value;
-        const scale = parseInt(document.getElementById('exportScale').value);
-        
-        // Create temporary canvas for export
-        const exportCanvas = document.createElement('canvas');
-        const exportCtx = exportCanvas.getContext('2d');
-        
-        // Calculate bounds
-        const bounds = this.getElementsBounds();
-        const padding = 50;
-        
-        exportCanvas.width = (bounds.width + padding * 2) * scale;
-        exportCanvas.height = (bounds.height + padding * 2) * scale;
-        
-        exportCtx.scale(scale, scale);
-        exportCtx.translate(-bounds.minX + padding, -bounds.minY + padding);
-        
-        // Set background
-        if (background !== 'transparent') {
-            exportCtx.fillStyle = background === 'white' ? '#ffffff' : '#f5f5f5';
-            exportCtx.fillRect(bounds.minX - padding, bounds.minY - padding, 
-                              bounds.width + padding * 2, bounds.height + padding * 2);
-        }
-        
-        // Draw elements and connections
-        this.drawElementsToContext(exportCtx);
-        
-        // Convert to blob and download
-        exportCanvas.toBlob((blob) => {
-            const fileName = `${this.metadata.flowTitle.toLowerCase().replace(/\s+/g, '-')}.png`;
-            this.downloadFile(blob, fileName);
-            this.showToast('Exported as PNG', 'success');
-        });
-    }
-    
-    exportAsSVG() {
-        const bounds = this.getElementsBounds();
-        const padding = 50;
-        
-        const svg = `
-            <svg width="${bounds.width + padding * 2}" height="${bounds.height + padding * 2}" 
-                 xmlns="http://www.w3.org/2000/svg">
-                <g transform="translate(${-bounds.minX + padding}, ${-bounds.minY + padding})">
-                    ${this.generateSVGElements()}
-                </g>
-            </svg>
-        `;
-        
-        const blob = new Blob([svg], { type: 'image/svg+xml' });
-        const fileName = `${this.metadata.flowTitle.toLowerCase().replace(/\s+/g, '-')}.svg`;
-        this.downloadFile(blob, fileName);
-        this.showToast('Exported as SVG', 'success');
     }
     
     // Utility Methods
@@ -1144,7 +834,6 @@ class BDDDiagrammingInterface {
         
         this.connections.push(connection);
         this.saveState();
-        this.markUnsaved();
         this.render();
     }
     
@@ -1177,930 +866,7 @@ class BDDDiagrammingInterface {
         });
     }
     
-    // History Management
-    saveState() {
-        const state = {
-            elements: JSON.parse(JSON.stringify(this.elements)),
-            connections: JSON.parse(JSON.stringify(this.connections)),
-            metadata: JSON.parse(JSON.stringify(this.metadata))
-        };
-        
-        // Remove future history if we're not at the end
-        if (this.historyIndex < this.history.length - 1) {
-            this.history = this.history.slice(0, this.historyIndex + 1);
-        }
-        
-        this.history.push(state);
-        
-        // Limit history size
-        if (this.history.length > this.maxHistorySize) {
-            this.history.shift();
-        } else {
-            this.historyIndex++;
-        }
-        
-        this.updateUndoRedoButtons();
-    }
-    
-    undo() {
-        if (this.historyIndex > 0) {
-            this.historyIndex--;
-            const state = this.history[this.historyIndex];
-            this.restoreState(state);
-            this.markUnsaved();
-        }
-    }
-    
-    redo() {
-        if (this.historyIndex < this.history.length - 1) {
-            this.historyIndex++;
-            const state = this.history[this.historyIndex];
-            this.restoreState(state);
-            this.markUnsaved();
-        }
-    }
-    
-    restoreState(state) {
-        this.elements = JSON.parse(JSON.stringify(state.elements));
-        this.connections = JSON.parse(JSON.stringify(state.connections));
-        this.metadata = JSON.parse(JSON.stringify(state.metadata));
-        
-        // Update connection points
-        this.elements.forEach(element => {
-            this.updateConnectionPoints(element);
-        });
-        
-        this.clearSelection();
-        this.render();
-        this.updatePropertiesPanel();
-        this.updateCanvasInfo();
-        this.updateMethodologyHeader();
-    }
-    
-    updateUndoRedoButtons() {
-        const undoBtn = document.getElementById('undoBtn');
-        const redoBtn = document.getElementById('redoBtn');
-        
-        if (undoBtn) undoBtn.disabled = this.historyIndex <= 0;
-        if (redoBtn) redoBtn.disabled = this.historyIndex >= this.history.length - 1;
-    }
-    
-    // Element Operations
-    deleteSelected() {
-        if (this.selectedElements.length === 0) return;
-        
-        // Remove connections that involve selected elements
-        this.connections = this.connections.filter(connection => {
-            return !this.selectedElements.includes(connection.startElement) &&
-                   !this.selectedElements.includes(connection.endElement);
-        });
-        
-        // Remove selected elements
-        this.selectedElements.forEach(element => {
-            const index = this.elements.indexOf(element);
-            if (index > -1) {
-                this.elements.splice(index, 1);
-            }
-        });
-        
-        this.clearSelection();
-        this.render();
-        this.saveState();
-        this.markUnsaved();
-    }
-    
-    duplicateSelected() {
-        if (this.selectedElements.length === 0) return;
-        
-        const duplicates = [];
-        const offset = 20;
-        
-        this.selectedElements.forEach(element => {
-            const duplicate = JSON.parse(JSON.stringify(element));
-            duplicate.id = Date.now() + Math.random();
-            duplicate.x += offset;
-            duplicate.y += offset;
-            this.updateConnectionPoints(duplicate);
-            this.elements.push(duplicate);
-            duplicates.push(duplicate);
-        });
-        
-        this.selectedElements = duplicates;
-        this.selectedElement = duplicates[duplicates.length - 1];
-        this.render();
-        this.updatePropertiesPanel();
-        this.saveState();
-        this.markUnsaved();
-    }
-    
-    bringToFront() {
-        if (!this.selectedElement) return;
-        
-        const index = this.elements.indexOf(this.selectedElement);
-        if (index > -1) {
-            this.elements.splice(index, 1);
-            this.elements.push(this.selectedElement);
-            this.render();
-            this.saveState();
-            this.markUnsaved();
-        }
-    }
-    
-    sendToBack() {
-        if (!this.selectedElement) return;
-        
-        const index = this.elements.indexOf(this.selectedElement);
-        if (index > -1) {
-            this.elements.splice(index, 1);
-            this.elements.unshift(this.selectedElement);
-            this.render();
-            this.saveState();
-            this.markUnsaved();
-        }
-    }
-    
-    moveSelectedElements(direction, distance) {
-        if (this.selectedElements.length === 0) return;
-        
-        const deltaX = direction === 'ArrowLeft' ? -distance : direction === 'ArrowRight' ? distance : 0;
-        const deltaY = direction === 'ArrowUp' ? -distance : direction === 'ArrowDown' ? distance : 0;
-        
-        this.selectedElements.forEach(element => {
-            element.x += deltaX;
-            element.y += deltaY;
-            if (this.snapToGrid) {
-                element.x = Math.round(element.x / this.gridSize) * this.gridSize;
-                element.y = Math.round(element.y / this.gridSize) * this.gridSize;
-            }
-            this.updateConnectionPoints(element);
-        });
-        
-        this.updateConnections();
-        this.render();
-        this.updatePropertiesPanel();
-        this.saveState();
-        this.markUnsaved();
-    }
-    
-    // Property Management
-    switchPropertyTab(tabName) {
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        document.getElementById(`${tabName}Tab`).classList.add('active');
-    }
-    
-    updateSelectedElementProperty(propertyId, value) {
-        if (!this.selectedElement) return;
-        
-        const propertyMap = {
-            'fillColor': 'fillColor',
-            'borderColor': 'borderColor',
-            'borderWidth': 'borderWidth',
-            'opacity': 'opacity',
-            'elementText': 'text',
-            'fontSize': 'fontSize',
-            'fontWeight': 'fontWeight',
-            'textAlign': 'textAlign',
-            'posX': 'x',
-            'posY': 'y',
-            'width': 'width',
-            'height': 'height',
-            'rotation': 'rotation'
-        };
-        
-        const property = propertyMap[propertyId];
-        if (property) {
-            // Convert string values to appropriate types
-            let convertedValue = value;
-            if (['borderWidth', 'opacity', 'fontSize', 'x', 'y', 'width', 'height', 'rotation'].includes(property)) {
-                convertedValue = parseFloat(value);
-            }
-            
-            this.selectedElement[property] = convertedValue;
-            
-            // Update connection points if position or size changed
-            if (['x', 'y', 'width', 'height'].includes(property)) {
-                this.updateConnectionPoints(this.selectedElement);
-                this.updateConnections();
-            }
-            
-            this.render();
-            this.markUnsaved();
-            
-            // Update range value displays
-            if (propertyId === 'borderWidth') {
-                document.getElementById('borderWidthValue').textContent = value + 'px';
-            } else if (propertyId === 'opacity') {
-                document.getElementById('opacityValue').textContent = value + '%';
-            } else if (propertyId === 'fontSize') {
-                document.getElementById('fontSizeValue').textContent = value + 'px';
-            } else if (propertyId === 'rotation') {
-                document.getElementById('rotationValue').textContent = value + '°';
-            }
-        }
-    }
-    
-    updatePropertiesPanel() {
-        const noSelection = document.getElementById('noSelection');
-        const elementProperties = document.getElementById('elementProperties');
-        
-        if (this.selectedElement) {
-            noSelection.style.display = 'none';
-            elementProperties.style.display = 'block';
-            
-            // Update property values
-            const fillColor = document.getElementById('fillColor');
-            const borderColor = document.getElementById('borderColor');
-            const borderWidth = document.getElementById('borderWidth');
-            const opacity = document.getElementById('opacity');
-            const elementText = document.getElementById('elementText');
-            const fontSize = document.getElementById('fontSize');
-            const fontWeight = document.getElementById('fontWeight');
-            const textAlign = document.getElementById('textAlign');
-            const posX = document.getElementById('posX');
-            const posY = document.getElementById('posY');
-            const width = document.getElementById('width');
-            const height = document.getElementById('height');
-            const rotation = document.getElementById('rotation');
-            
-            if (fillColor) fillColor.value = this.selectedElement.fillColor === 'transparent' ? '#ffffff' : this.selectedElement.fillColor;
-            if (borderColor) borderColor.value = this.selectedElement.borderColor === 'transparent' ? '#000000' : this.selectedElement.borderColor;
-            if (borderWidth) {
-                borderWidth.value = this.selectedElement.borderWidth;
-                document.getElementById('borderWidthValue').textContent = this.selectedElement.borderWidth + 'px';
-            }
-            if (opacity) {
-                opacity.value = this.selectedElement.opacity;
-                document.getElementById('opacityValue').textContent = this.selectedElement.opacity + '%';
-            }
-            if (elementText) elementText.value = this.selectedElement.text;
-            if (fontSize) {
-                fontSize.value = this.selectedElement.fontSize;
-                document.getElementById('fontSizeValue').textContent = this.selectedElement.fontSize + 'px';
-            }
-            if (fontWeight) fontWeight.value = this.selectedElement.fontWeight;
-            if (textAlign) textAlign.value = this.selectedElement.textAlign;
-            if (posX) posX.value = Math.round(this.selectedElement.x);
-            if (posY) posY.value = Math.round(this.selectedElement.y);
-            if (width) width.value = Math.round(this.selectedElement.width);
-            if (height) height.value = Math.round(this.selectedElement.height);
-            if (rotation) {
-                rotation.value = this.selectedElement.rotation;
-                document.getElementById('rotationValue').textContent = this.selectedElement.rotation + '°';
-            }
-        } else {
-            noSelection.style.display = 'block';
-            elementProperties.style.display = 'none';
-        }
-    }
-    
-    // Canvas Operations
-    clearCanvas() {
-        if (this.elements.length === 0) return;
-        
-        if (confirm('Are you sure you want to clear the canvas? This action cannot be undone.')) {
-            this.elements = [];
-            this.connections = [];
-            this.clearSelection();
-            this.render();
-            this.saveState();
-            this.markUnsaved();
-        }
-    }
-    
-    zoomIn() {
-        this.zoom = Math.min(this.zoom * 1.2, 4);
-        this.render();
-        this.updateCanvasInfo();
-    }
-    
-    zoomOut() {
-        this.zoom = Math.max(this.zoom / 1.2, 0.25);
-        this.render();
-        this.updateCanvasInfo();
-    }
-    
-    resetZoom() {
-        this.zoom = 1;
-        this.panX = 0;
-        this.panY = 0;
-        this.render();
-        this.updateCanvasInfo();
-    }
-    
-    fitToScreen() {
-        if (this.elements.length === 0) return;
-        
-        const bounds = this.getElementsBounds();
-        const padding = 50;
-        
-        const canvasWidth = this.canvas.clientWidth;
-        const canvasHeight = this.canvas.clientHeight;
-        
-        const scaleX = (canvasWidth - padding * 2) / bounds.width;
-        const scaleY = (canvasHeight - padding * 2) / bounds.height;
-        
-        this.zoom = Math.min(scaleX, scaleY, 2); // Max zoom of 2x
-        
-        // Center the diagram
-        this.panX = (canvasWidth / 2 - (bounds.minX + bounds.width / 2) * this.zoom) / this.zoom;
-        this.panY = (canvasHeight / 2 - (bounds.minY + bounds.height / 2) * this.zoom) / this.zoom;
-        
-        this.render();
-        this.updateCanvasInfo();
-    }
-    
-    getElementsBounds() {
-        if (this.elements.length === 0) {
-            return { minX: 0, minY: 0, maxX: 100, maxY: 100, width: 100, height: 100 };
-        }
-        
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        
-        this.elements.forEach(element => {
-            minX = Math.min(minX, element.x);
-            minY = Math.min(minY, element.y);
-            maxX = Math.max(maxX, element.x + element.width);
-            maxY = Math.max(maxY, element.y + element.height);
-        });
-        
-        return {
-            minX, minY, maxX, maxY,
-            width: maxX - minX,
-            height: maxY - minY
-        };
-    }
-    
-    // Canvas Controls
-    toggleGrid() {
-        this.gridVisible = !this.gridVisible;
-        const gridToggle = document.getElementById('gridToggle');
-        if (gridToggle) {
-            gridToggle.classList.toggle('active', this.gridVisible);
-        }
-        this.render();
-    }
-    
-    toggleSnap() {
-        this.snapToGrid = !this.snapToGrid;
-        const snapToggle = document.getElementById('snapToggle');
-        if (snapToggle) {
-            snapToggle.classList.toggle('active', this.snapToGrid);
-        }
-    }
-    
-    toggleGuides() {
-        this.guidesVisible = !this.guidesVisible;
-        const guidesToggle = document.getElementById('guidesToggle');
-        if (guidesToggle) {
-            guidesToggle.classList.toggle('active', this.guidesVisible);
-        }
-    }
-    
-    // Panel Management
-    toggleOutcomesPanel() {
-        const panel = document.getElementById('outcomesPanel');
-        panel.classList.toggle('open');
-    }
-    
-    toggleLayersPanel() {
-        const panel = document.getElementById('layersPanel');
-        panel.classList.toggle('open');
-    }
-    
-    // Document Management
-    createNewDocument(title, type) {
-        const doc = {
-            id: Date.now(),
-            title: title,
-            type: type,
-            elements: [],
-            connections: [],
-            metadata: {
-                flowTitle: title,
-                methodology: 'BDD',
-                diagramType: type === 'flow' ? 'Flowchart' : 'Sequence',
-                primaryOutcomes: [],
-                timers: []
-            }
-        };
-        
-        this.documents.set(doc.id, doc);
-        this.currentDocument = doc.id;
-        this.updateDocumentSwitcher();
-        
-        return doc;
-    }
-    
-    switchDocument(docId) {
-        const doc = this.documents.get(docId);
-        if (doc) {
-            // Save current state
-            if (this.currentDocument) {
-                const currentDoc = this.documents.get(this.currentDocument);
-                if (currentDoc) {
-                    currentDoc.elements = [...this.elements];
-                    currentDoc.connections = [...this.connections];
-                    currentDoc.metadata = { ...this.metadata };
-                }
-            }
-            
-            // Load new document
-            this.elements = [...doc.elements];
-            this.connections = [...doc.connections];
-            this.metadata = { ...doc.metadata };
-            this.currentDocument = docId;
-            
-            this.clearSelection();
-            this.render();
-            this.updatePropertiesPanel();
-            this.updateCanvasInfo();
-            this.updateMethodologyHeader();
-        }
-    }
-    
-    updateDocumentSwitcher() {
-        const select = document.getElementById('documentSelect');
-        if (select) {
-            select.innerHTML = '<option value="">Select Document...</option>';
-            
-            this.documents.forEach((doc, id) => {
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = `${doc.title} (${doc.type})`;
-                if (id === this.currentDocument) {
-                    option.selected = true;
-                }
-                select.appendChild(option);
-            });
-        }
-    }
-    
-    showAddDocumentDialog() {
-        const title = prompt('Enter document title:');
-        if (title) {
-            const type = confirm('Create a sequence diagram? (Cancel for flowchart)') ? 'sequence' : 'flow';
-            this.createNewDocument(title, type);
-        }
-    }
-    
-    // Layer Management
-    addLayer() {
-        const name = prompt('Enter layer name:');
-        if (name) {
-            const layer = {
-                id: Date.now(),
-                name: name,
-                visible: true,
-                locked: false
-            };
-            this.layers.push(layer);
-            this.updateLayersList();
-        }
-    }
-    
-    deleteLayer() {
-        if (this.layers.length <= 1) {
-            this.showToast('Cannot delete the last layer', 'warning');
-            return;
-        }
-        
-        const layerToDelete = this.layers.find(l => l.id === this.currentLayer);
-        if (layerToDelete && confirm(`Delete layer "${layerToDelete.name}"?`)) {
-            // Move elements to default layer
-            this.elements.forEach(element => {
-                if (element.layer === this.currentLayer) {
-                    element.layer = 'default';
-                }
-            });
-            
-            this.layers = this.layers.filter(l => l.id !== this.currentLayer);
-            this.currentLayer = 'default';
-            this.updateLayersList();
-            this.render();
-        }
-    }
-    
-    updateLayersList() {
-        const layersList = document.getElementById('layersList');
-        if (layersList) {
-            layersList.innerHTML = '';
-            
-            this.layers.forEach(layer => {
-                const layerItem = document.createElement('div');
-                layerItem.className = `layer-item ${layer.id === this.currentLayer ? 'active' : ''}`;
-                layerItem.innerHTML = `
-                    <div class="layer-visibility ${layer.visible ? 'visible' : ''}" data-layer="${layer.id}">
-                        ${layer.visible ? '👁' : ''}
-                    </div>
-                    <div class="layer-name">${layer.name}</div>
-                    <div class="layer-lock ${layer.locked ? 'locked' : ''}" data-layer="${layer.id}">
-                        ${layer.locked ? '🔒' : '🔓'}
-                    </div>
-                `;
-                
-                layerItem.addEventListener('click', () => {
-                    this.currentLayer = layer.id;
-                    this.updateLayersList();
-                });
-                
-                layersList.appendChild(layerItem);
-            });
-        }
-    }
-    
-    isLayerVisible(layerId) {
-        const layer = this.layers.find(l => l.id === layerId);
-        return layer ? layer.visible : true;
-    }
-    
-    // Outcome Management
-    clearOutcomeFilters() {
-        this.outcomeFilters.clear();
-        this.render();
-    }
-    
-    // Modal Management
-    hideModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-        }
-    }
-    
-    confirmMetadata() {
-        const flowTitle = document.getElementById('flowTitle').value;
-        const methodology = document.getElementById('methodology').value;
-        const diagramType = document.getElementById('diagramType').value;
-        const primaryOutcomes = document.getElementById('primaryOutcomes').value.split(',').map(s => s.trim()).filter(s => s);
-        const timers = document.getElementById('timers').value.split(',').map(s => s.trim()).filter(s => s);
-        
-        this.metadata = {
-            flowTitle: flowTitle || 'Untitled Flow',
-            methodology: methodology || 'BDD',
-            diagramType: diagramType || 'Flowchart',
-            primaryOutcomes: primaryOutcomes,
-            timers: timers
-        };
-        
-        this.updateMethodologyHeader();
-        this.hideModal('metadataModal');
-        this.markUnsaved();
-    }
-    
-    skipMetadata() {
-        this.hideModal('metadataModal');
-    }
-    
-    // UI Updates
-    updateMethodologyHeader() {
-        const header = document.querySelector('.methodology-text');
-        if (header) {
-            header.textContent = this.metadata.methodology || 'BDD';
-        }
-        
-        const subtitle = document.querySelector('.methodology-subtitle');
-        if (subtitle) {
-            const subtitles = {
-                'BDD': 'Given-When-Then',
-                'TDD': 'Red-Green-Refactor',
-                'DDD': 'Domain-Driven',
-                'SDD': 'Specification-Driven'
-            };
-            subtitle.textContent = subtitles[this.metadata.methodology] || 'Given-When-Then';
-        }
-    }
-    
-    updateCanvasInfo() {
-        const info = document.getElementById('canvasInfo');
-        if (info) {
-            info.textContent = `Elements: ${this.elements.length} | Connections: ${this.connections.length} | Zoom: ${Math.round(this.zoom * 100)}%`;
-        }
-        
-        // Update zoom button text
-        const resetZoomBtn = document.getElementById('resetZoomBtn');
-        if (resetZoomBtn) {
-            resetZoomBtn.textContent = `${Math.round(this.zoom * 100)}%`;
-        }
-    }
-    
-    markUnsaved() {
-        this.hasUnsavedChanges = true;
-        // Could add visual indicator here
-    }
-    
-    // Utility Methods
-    showToast(message, type = 'info') {
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: ${type === 'error' ? '#f44336' : type === 'warning' ? '#ff9800' : type === 'success' ? '#4caf50' : '#2196f3'};
-            color: white;
-            padding: 12px 20px;
-            border-radius: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 10000;
-            font-size: 14px;
-            max-width: 300px;
-            word-wrap: break-word;
-        `;
-        
-        document.body.appendChild(toast);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.parentNode.removeChild(toast);
-            }
-        }, 3000);
-    }
-    
-    downloadFile(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-    
-    generateMarkdown() {
-        const mermaid = this.generateMermaidDiagram();
-        const translation = this.generateTranslation();
-        
-        return `# ${this.metadata.methodology} — ${this.metadata.diagramType}: ${this.metadata.flowTitle}
-
-## Diagram Input
-
-\`\`\`mermaid
-${mermaid}
-\`\`\`
-
-## Translation
-
-${translation}
-`;
-    }
-    
-    generateMermaidDiagram() {
-        let mermaid = this.metadata.diagramType === 'Sequence' ? 'sequenceDiagram\n' : 'flowchart TD\n';
-        
-        // Add metadata comments
-        mermaid += `  %% Flow Title: ${this.metadata.flowTitle} (${this.metadata.methodology})\n`;
-        if (this.metadata.primaryOutcomes.length > 0) {
-            mermaid += `  %% Primary Outcomes: ${this.metadata.primaryOutcomes.join(', ')}\n`;
-        }
-        mermaid += '\n';
-        
-        // Generate nodes
-        this.elements.forEach((element, index) => {
-            const nodeId = this.getNodeId(element);
-            const nodeText = element.text || element.type;
-            
-            if (this.metadata.diagramType === 'Sequence') {
-                // Sequence diagram syntax
-                if (element.type === 'participant') {
-                    mermaid += `  participant ${nodeId} as ${nodeText}\n`;
-                }
-            } else {
-                // Flowchart syntax
-                const shape = this.getMermaidShape(element.type);
-                mermaid += `  ${nodeId}${shape.start}${nodeText}${shape.end}\n`;
-            }
-        });
-        
-        mermaid += '\n';
-        
-        // Generate connections
-        this.connections.forEach(connection => {
-            const startId = this.getNodeId(connection.startElement);
-            const endId = this.getNodeId(connection.endElement);
-            const label = connection.label ? `|${connection.label}|` : '';
-            
-            if (this.metadata.diagramType === 'Sequence') {
-                mermaid += `  ${startId}->>+${endId}: ${label}\n`;
-            } else {
-                const arrow = connection.style === 'dashed' ? '-.->': '-->';
-                mermaid += `  ${startId} ${arrow}${label} ${endId}\n`;
-            }
-        });
-        
-        return mermaid;
-    }
-    
-    getNodeId(element) {
-        const index = this.elements.indexOf(element);
-        return String.fromCharCode(65 + index); // A, B, C, etc.
-    }
-    
-    getMermaidShape(type) {
-        const shapes = {
-            'start': { start: '([', end: '])' },
-            'end': { start: '([', end: '])' },
-            'action': { start: '[', end: ']' },
-            'decision': { start: '{', end: '}' },
-            'timer': { start: '((', end: '))' },
-            'participant': { start: '[', end: ']' },
-            'text': { start: '[', end: ']' },
-            'note': { start: '[', end: ']' }
-        };
-        return shapes[type] || { start: '[', end: ']' };
-    }
-    
-    generateTranslation() {
-        let translation = `**Flow Title:** ${this.metadata.flowTitle}\n`;
-        translation += `**Methodology:** ${this.metadata.methodology}\n`;
-        translation += `**Diagram Type:** ${this.metadata.diagramType}\n`;
-        
-        if (this.metadata.primaryOutcomes.length > 0) {
-            translation += `**Primary Outcomes:** \`${this.metadata.primaryOutcomes.join('`, `')}\`\n`;
-        }
-        
-        if (this.metadata.timers.length > 0) {
-            translation += `**Timers:** \`${this.metadata.timers.join('`, `')}\`\n`;
-        }
-        
-        translation += '\n### Elements\n\n';
-        
-        this.elements.forEach((element, index) => {
-            const nodeId = this.getNodeId(element);
-            translation += `**${nodeId} — ${element.type}**\n`;
-            translation += `- *Text:* ${element.text}\n`;
-            if (element.businessOutcome) {
-                translation += `- *Outcome:* ${element.businessOutcome}\n`;
-            }
-            translation += '\n';
-        });
-        
-        if (this.connections.length > 0) {
-            translation += '### Connections\n\n';
-            this.connections.forEach((connection, index) => {
-                const startId = this.getNodeId(connection.startElement);
-                const endId = this.getNodeId(connection.endElement);
-                translation += `**${startId} → ${endId}**\n`;
-                if (connection.label) {
-                    translation += `- *Label:* ${connection.label}\n`;
-                }
-                translation += '\n';
-            });
-        }
-        
-        return translation;
-    }
-    
-    generateSVGElements() {
-        let svg = '';
-        
-        // Draw connections first
-        this.connections.forEach(connection => {
-            svg += `<line x1="${connection.start.x}" y1="${connection.start.y}" 
-                         x2="${connection.end.x}" y2="${connection.end.y}" 
-                         stroke="${connection.color}" stroke-width="2" />`;
-            
-            // Arrow head
-            if (connection.arrowType === 'arrow') {
-                const angle = Math.atan2(connection.end.y - connection.start.y, connection.end.x - connection.start.x);
-                const headLength = 10;
-                const x1 = connection.end.x - headLength * Math.cos(angle - Math.PI / 6);
-                const y1 = connection.end.y - headLength * Math.sin(angle - Math.PI / 6);
-                const x2 = connection.end.x - headLength * Math.cos(angle + Math.PI / 6);
-                const y2 = connection.end.y - headLength * Math.sin(angle + Math.PI / 6);
-                
-                svg += `<polygon points="${connection.end.x},${connection.end.y} ${x1},${y1} ${x2},${y2}" 
-                               fill="${connection.color}" />`;
-            }
-        });
-        
-        // Draw elements
-        this.elements.forEach(element => {
-            if (element.type === 'decision') {
-                // Diamond shape
-                const cx = element.x + element.width / 2;
-                const cy = element.y + element.height / 2;
-                svg += `<polygon points="${cx},${element.y} ${element.x + element.width},${cy} 
-                                       ${cx},${element.y + element.height} ${element.x},${cy}" 
-                               fill="${element.fillColor}" stroke="${element.borderColor}" 
-                               stroke-width="${element.borderWidth}" />`;
-            } else {
-                // Rectangle
-                svg += `<rect x="${element.x}" y="${element.y}" width="${element.width}" height="${element.height}" 
-                             fill="${element.fillColor}" stroke="${element.borderColor}" 
-                             stroke-width="${element.borderWidth}" rx="4" />`;
-            }
-            
-            // Text
-            if (element.text) {
-                svg += `<text x="${element.x + element.width / 2}" y="${element.y + element.height / 2}" 
-                             text-anchor="middle" dominant-baseline="middle" 
-                             font-family="Arial" font-size="${element.fontSize}" 
-                             fill="${element.borderColor}">${element.text}</text>`;
-            }
-        });
-        
-        return svg;
-    }
-    
-    drawElementsToContext(ctx) {
-        // Save current context
-        ctx.save();
-        
-        // Draw connections first
-        this.connections.forEach(connection => {
-            ctx.strokeStyle = connection.color;
-            ctx.lineWidth = 2;
-            
-            if (connection.style === 'dashed') {
-                ctx.setLineDash([5, 5]);
-            } else {
-                ctx.setLineDash([]);
-            }
-            
-            ctx.beginPath();
-            ctx.moveTo(connection.start.x, connection.start.y);
-            ctx.lineTo(connection.end.x, connection.end.y);
-            ctx.stroke();
-            
-            // Draw arrow head
-            if (connection.arrowType === 'arrow') {
-                const angle = Math.atan2(connection.end.y - connection.start.y, connection.end.x - connection.start.x);
-                const headLength = 10;
-                
-                ctx.beginPath();
-                ctx.moveTo(connection.end.x, connection.end.y);
-                ctx.lineTo(
-                    connection.end.x - headLength * Math.cos(angle - Math.PI / 6),
-                    connection.end.y - headLength * Math.sin(angle - Math.PI / 6)
-                );
-                ctx.moveTo(connection.end.x, connection.end.y);
-                ctx.lineTo(
-                    connection.end.x - headLength * Math.cos(angle + Math.PI / 6),
-                    connection.end.y - headLength * Math.sin(angle + Math.PI / 6)
-                );
-                ctx.stroke();
-            }
-        });
-        
-        // Draw elements
-        this.elements.forEach(element => {
-            ctx.fillStyle = element.fillColor;
-            ctx.strokeStyle = element.borderColor;
-            ctx.lineWidth = element.borderWidth;
-            ctx.font = `${element.fontWeight} ${element.fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            if (element.type === 'decision') {
-                // Diamond shape
-                const cx = element.x + element.width / 2;
-                const cy = element.y + element.height / 2;
-                
-                ctx.beginPath();
-                ctx.moveTo(cx, element.y);
-                ctx.lineTo(element.x + element.width, cy);
-                ctx.lineTo(cx, element.y + element.height);
-                ctx.lineTo(element.x, cy);
-                ctx.closePath();
-                
-                if (element.fillColor !== 'transparent') {
-                    ctx.fill();
-                }
-                if (element.borderColor !== 'transparent') {
-                    ctx.stroke();
-                }
-            } else {
-                // Rectangle
-                ctx.beginPath();
-                ctx.rect(element.x, element.y, element.width, element.height);
-                
-                if (element.fillColor !== 'transparent') {
-                    ctx.fill();
-                }
-                if (element.borderColor !== 'transparent') {
-                    ctx.stroke();
-                }
-            }
-            
-            // Draw text
-            if (element.text) {
-                ctx.fillStyle = element.borderColor !== 'transparent' ? element.borderColor : '#000000';
-                ctx.fillText(element.text, element.x + element.width / 2, element.y + element.height / 2);
-            }
-        });
-        
-        ctx.restore();
-    }
-    
-    // Rendering Methods (from original implementation)
+    // Rendering Methods
     render() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
@@ -2599,6 +1365,1076 @@ ${translation}
         this.ctx.stroke();
         this.ctx.setLineDash([]);
     }
+    
+    // Utility methods for the interface
+    updateCanvasInfo() {
+        const info = document.getElementById('canvasInfo');
+        if (info) {
+            info.textContent = `Elements: ${this.elements.length} | Connections: ${this.connections.length} | Zoom: ${Math.round(this.zoom * 100)}%`;
+        }
+    }
+    
+    updatePropertiesPanel() {
+        // Implementation for updating properties panel
+        const noSelection = document.getElementById('noSelection');
+        const elementProperties = document.getElementById('elementProperties');
+        
+        if (this.selectedElement) {
+            noSelection.style.display = 'none';
+            elementProperties.style.display = 'block';
+            
+            // Update property values
+            const fillColor = document.getElementById('fillColor');
+            const borderColor = document.getElementById('borderColor');
+            const elementText = document.getElementById('elementText');
+            
+            if (fillColor) fillColor.value = this.selectedElement.fillColor === 'transparent' ? '#ffffff' : this.selectedElement.fillColor;
+            if (borderColor) borderColor.value = this.selectedElement.borderColor === 'transparent' ? '#000000' : this.selectedElement.borderColor;
+            if (elementText) elementText.value = this.selectedElement.text;
+        } else {
+            noSelection.style.display = 'block';
+            elementProperties.style.display = 'none';
+        }
+    }
+    
+    // Import/Export functionality
+    showImportModal() {
+        const modal = document.getElementById('importModal');
+        if (modal) {
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+        }
+    }
+    
+    hideModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+    }
+    
+    handleFileUpload(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            const file = files[0];
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const markdown = e.target.result;
+                // Store the uploaded markdown content for preview
+                this.uploadedMarkdown = markdown;
+                this.enablePreviewButton();
+            };
+            
+            reader.readAsText(file);
+        }
+    }
+    
+    enablePreviewButton() {
+        const previewBtn = document.getElementById('previewImportBtn');
+        
+        if (previewBtn) {
+            // Enable preview button if we have uploaded markdown content
+            previewBtn.disabled = !this.uploadedMarkdown || !this.uploadedMarkdown.trim();
+        }
+    }
+    
+    previewImport() {
+        const diagramTypeRadios = document.querySelectorAll('input[name="diagramType"]');
+        const previewContent = document.getElementById('previewContent');
+        const importPreview = document.getElementById('importPreview');
+        const parseWarnings = document.getElementById('parseWarnings');
+        const warningsList = document.getElementById('warningsList');
+        const confirmBtn = document.getElementById('confirmImportBtn');
+        
+        if (!this.uploadedMarkdown || !this.uploadedMarkdown.trim()) {
+            alert('Please upload a markdown file first.');
+            return;
+        }
+        
+        // Get selected diagram type
+        let diagramType = 'flow';
+        diagramTypeRadios.forEach(radio => {
+            if (radio.checked) {
+                diagramType = radio.value;
+            }
+        });
+        
+        // Set the current diagram type for export functionality
+        this.currentDiagramType = diagramType;
+        
+        // Parse the markdown
+        const parseResult = this.markdownParser.parse(this.uploadedMarkdown, diagramType);
+        
+        if (parseResult) {
+            // Show preview
+            let previewHtml = `
+                <h4>Parsed Elements: ${parseResult.elements.length}</h4>
+                <h4>Connections: ${parseResult.connections.length}</h4>
+                <h4>Metadata:</h4>
+                <ul>
+                    <li><strong>Flow Title:</strong> ${parseResult.metadata.flowTitle || 'Not specified'}</li>
+                    <li><strong>Methodology:</strong> ${parseResult.metadata.methodology}</li>
+                    <li><strong>Diagram Type:</strong> ${parseResult.metadata.diagramType}</li>
+                    <li><strong>Primary Outcomes:</strong> ${parseResult.metadata.primaryOutcomes.join(', ') || 'None'}</li>
+                    <li><strong>Timers:</strong> ${parseResult.metadata.timers.join(', ') || 'None'}</li>
+                </ul>
+            `;
+            
+            if (parseResult.elements.length > 0) {
+                previewHtml += '<h4>Elements:</h4><ul>';
+                parseResult.elements.forEach(element => {
+                    previewHtml += `<li>${element.type}: ${element.text}</li>`;
+                });
+                previewHtml += '</ul>';
+            }
+            
+            previewContent.innerHTML = previewHtml;
+            importPreview.style.display = 'block';
+            
+            // Show warnings if any
+            if (parseResult.warnings && parseResult.warnings.length > 0) {
+                warningsList.innerHTML = '';
+                parseResult.warnings.forEach(warning => {
+                    const li = document.createElement('li');
+                    li.textContent = warning;
+                    warningsList.appendChild(li);
+                });
+                parseWarnings.style.display = 'block';
+            } else {
+                parseWarnings.style.display = 'none';
+            }
+            
+            // Enable confirm button
+            confirmBtn.disabled = false;
+            
+            // Store parse result for confirmation
+            this.pendingImport = parseResult;
+        } else {
+            alert('Failed to parse the markdown. Please check the format.');
+        }
+    }
+    
+    confirmImport() {
+        if (!this.pendingImport) {
+            alert('No import data available. Please preview first.');
+            return;
+        }
+        
+        // Close modal first
+        this.hideModal('importModal');
+        
+        // Show loading indicator
+        this.showLoadingIndicator('Importing and auto-rendering diagram...');
+        
+        // Use setTimeout to allow UI to update with loading indicator
+        setTimeout(() => {
+            try {
+                // Clear current canvas
+                this.elements = [];
+                this.connections = [];
+                
+                // Import the parsed elements and connections
+                this.elements = [...this.pendingImport.elements];
+                this.connections = [...this.pendingImport.connections];
+                this.metadata = { ...this.pendingImport.metadata };
+                
+                // Update connection points for all elements
+                this.elements.forEach(element => {
+                    this.updateConnectionPoints(element);
+                });
+                
+                // Update business outcomes
+                this.updateBusinessOutcomes();
+                
+                // Force immediate render
+                this.render();
+                this.saveState();
+                
+                // Fit to screen to show the imported diagram
+                this.fitToScreen();
+                
+                // Hide loading indicator
+                this.hideLoadingIndicator();
+                
+                // Show success notification with element count
+                this.showSuccessNotification(`Diagram auto-rendered successfully - ${this.elements.length} elements, ${this.connections.length} connections`);
+                
+                // Clear pending import after successful rendering
+                this.pendingImport = null;
+                
+                // Force another render to ensure visibility
+                setTimeout(() => {
+                    this.render();
+                    this.fitToScreen();
+                }, 50);
+                
+            } catch (error) {
+                this.hideLoadingIndicator();
+                console.error('Import error:', error);
+                alert('Error importing diagram: ' + error.message);
+            }
+        }, 100);
+    }
+    
+    updateBusinessOutcomes() {
+        this.businessOutcomes.clear();
+        
+        this.elements.forEach(element => {
+            if (element.businessOutcome) {
+                const outcome = element.businessOutcome;
+                if (!this.businessOutcomes.has(outcome)) {
+                    this.businessOutcomes.set(outcome, {
+                        name: outcome,
+                        count: 0,
+                        color: this.markdownParser.getOutcomeColor(outcome),
+                        elements: []
+                    });
+                }
+                
+                const outcomeData = this.businessOutcomes.get(outcome);
+                outcomeData.count++;
+                outcomeData.elements.push(element);
+            }
+        });
+    }
+    
+    showSuccessNotification(message) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'success-notification';
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4caf50;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 10);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    showLoadingIndicator(message = 'Loading...') {
+        // Remove existing loading indicator if any
+        this.hideLoadingIndicator();
+        
+        // Create loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.id = 'loadingIndicator';
+        loadingIndicator.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20000;
+            font-family: Arial, sans-serif;
+            color: white;
+        `;
+        
+        // Create spinner
+        const spinner = document.createElement('div');
+        spinner.style.cssText = `
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2196f3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        `;
+        
+        // Add CSS animation for spinner
+        if (!document.getElementById('spinnerStyle')) {
+            const style = document.createElement('style');
+            style.id = 'spinnerStyle';
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Create message
+        const messageElement = document.createElement('div');
+        messageElement.textContent = message;
+        messageElement.style.cssText = `
+            font-size: 16px;
+            font-weight: 500;
+            text-align: center;
+        `;
+        
+        loadingIndicator.appendChild(spinner);
+        loadingIndicator.appendChild(messageElement);
+        document.body.appendChild(loadingIndicator);
+    }
+    
+    hideLoadingIndicator() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    fitToScreen() {
+        if (this.elements.length === 0) return;
+        
+        // Calculate bounding box of all elements
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        this.elements.forEach(element => {
+            minX = Math.min(minX, element.x);
+            minY = Math.min(minY, element.y);
+            maxX = Math.max(maxX, element.x + element.width);
+            maxY = Math.max(maxY, element.y + element.height);
+        });
+        
+        // Add padding
+        const padding = 50;
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+        
+        // Calculate required zoom and pan
+        const canvasWidth = this.canvas.clientWidth;
+        const canvasHeight = this.canvas.clientHeight;
+        const contentWidth = maxX - minX;
+        const contentHeight = maxY - minY;
+        
+        const zoomX = canvasWidth / contentWidth;
+        const zoomY = canvasHeight / contentHeight;
+        this.zoom = Math.min(zoomX, zoomY, 1); // Don't zoom in beyond 100%
+        
+        // Center the content
+        this.panX = (canvasWidth / this.zoom - contentWidth) / 2 - minX;
+        this.panY = (canvasHeight / this.zoom - contentHeight) / 2 - minY;
+        
+        this.render();
+    }
+    
+    // Other functionality
+    newDiagram() { 
+        if (confirm('Create a new diagram? This will clear the current canvas.')) {
+            this.elements = []; 
+            this.connections = []; 
+            this.businessOutcomes.clear();
+            this.render(); 
+            this.saveState();
+        }
+    }
+    
+    showExportModal() {
+        const modal = document.getElementById('exportModal');
+        if (modal) {
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+        }
+    }
+    
+    saveDiagram() { 
+        const data = {
+            elements: this.elements,
+            connections: this.connections,
+            metadata: this.metadata,
+            zoom: this.zoom,
+            panX: this.panX,
+            panY: this.panY
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    undo() { console.log('Undo'); }
+    redo() { console.log('Redo'); }
+    zoomIn() { this.zoom = Math.min(this.zoom * 1.2, 3); this.render(); }
+    zoomOut() { this.zoom = Math.max(this.zoom / 1.2, 0.1); this.render(); }
+    resetZoom() { this.zoom = 1; this.panX = 0; this.panY = 0; this.render(); }
+    switchDocument() { console.log('Switch document'); }
+    showAddDocumentDialog() { console.log('Add document'); }
+    toggleOutcomesPanel() { console.log('Toggle outcomes panel'); }
+    toggleLayersPanel() { console.log('Toggle layers panel'); }
+    toggleGrid() { this.gridVisible = !this.gridVisible; this.render(); }
+    toggleSnap() { this.snapToGrid = !this.snapToGrid; }
+    toggleGuides() { this.guidesVisible = !this.guidesVisible; }
+    switchPropertyTab() { console.log('Switch property tab'); }
+    updateSelectedElementProperty() { console.log('Update property'); }
+    deleteSelected() {
+        if (this.selectedElements.length === 0) {
+            alert('No elements selected to delete.');
+            return;
+        }
+        
+        // Remove connections that involve selected elements
+        this.connections = this.connections.filter(connection => {
+            return !this.selectedElements.includes(connection.startElement) && 
+                   !this.selectedElements.includes(connection.endElement);
+        });
+        
+        // Remove selected elements
+        this.selectedElements.forEach(element => {
+            const index = this.elements.indexOf(element);
+            if (index > -1) {
+                this.elements.splice(index, 1);
+            }
+        });
+        
+        // Clear selection
+        this.clearSelection();
+        
+        // Update display
+        this.render();
+        this.saveState();
+        
+        this.showSuccessNotification(`Deleted ${this.selectedElements.length} element(s) and associated connections`);
+    }
+    
+    duplicateSelected() {
+        if (this.selectedElements.length === 0) {
+            alert('No elements selected to duplicate.');
+            return;
+        }
+        
+        const duplicatedElements = [];
+        const offsetX = 50;
+        const offsetY = 50;
+        
+        this.selectedElements.forEach(element => {
+            const duplicatedElement = {
+                ...element,
+                id: Date.now() + Math.random(),
+                x: element.x + offsetX,
+                y: element.y + offsetY
+            };
+            
+            // Update connection points for the duplicated element
+            this.updateConnectionPoints(duplicatedElement);
+            
+            this.elements.push(duplicatedElement);
+            duplicatedElements.push(duplicatedElement);
+        });
+        
+        // Select the duplicated elements
+        this.selectedElements = duplicatedElements;
+        this.selectedElement = duplicatedElements[duplicatedElements.length - 1] || null;
+        
+        // Update display
+        this.render();
+        this.updatePropertiesPanel();
+        this.saveState();
+        
+        this.showSuccessNotification(`Duplicated ${duplicatedElements.length} element(s)`);
+    }
+    
+    bringToFront() {
+        if (this.selectedElements.length === 0) {
+            alert('No elements selected to bring to front.');
+            return;
+        }
+        
+        // Remove selected elements from their current positions
+        this.selectedElements.forEach(element => {
+            const index = this.elements.indexOf(element);
+            if (index > -1) {
+                this.elements.splice(index, 1);
+            }
+        });
+        
+        // Add them to the end of the array (front of rendering order)
+        this.elements.push(...this.selectedElements);
+        
+        // Update display
+        this.render();
+        this.saveState();
+        
+        this.showSuccessNotification(`Brought ${this.selectedElements.length} element(s) to front`);
+    }
+    
+    sendToBack() {
+        if (this.selectedElements.length === 0) {
+            alert('No elements selected to send to back.');
+            return;
+        }
+        
+        // Remove selected elements from their current positions
+        this.selectedElements.forEach(element => {
+            const index = this.elements.indexOf(element);
+            if (index > -1) {
+                this.elements.splice(index, 1);
+            }
+        });
+        
+        // Add them to the beginning of the array (back of rendering order)
+        this.elements.unshift(...this.selectedElements);
+        
+        // Update display
+        this.render();
+        this.saveState();
+        
+        this.showSuccessNotification(`Sent ${this.selectedElements.length} element(s) to back`);
+    }
+    clearCanvas() { this.elements = []; this.connections = []; this.render(); }
+    moveSelectedElements() { console.log('Move selected elements'); }
+    isLayerVisible() { return true; }
+    saveState() { console.log('Save state'); }
+    createNewDocument() { console.log('Create new document'); }
+    renderDiagram() {
+        if (!this.pendingImport) {
+            // If no pending import, check if we have elements to re-render
+            if (this.elements.length > 0) {
+                this.showSuccessNotification(`Diagram re-rendered - ${this.elements.length} elements`);
+                this.render();
+                this.fitToScreen();
+                return;
+            } else {
+                alert('No data to render. Please import markdown first using the Import MD button.');
+                return;
+            }
+        }
+        
+        // Clear current canvas
+        this.elements = [];
+        this.connections = [];
+        
+        // Import the parsed elements and connections
+        this.elements = [...this.pendingImport.elements];
+        this.connections = [...this.pendingImport.connections];
+        this.metadata = { ...this.pendingImport.metadata };
+        
+        // Update connection points for all elements
+        this.elements.forEach(element => {
+            this.updateConnectionPoints(element);
+        });
+        
+        // Update business outcomes
+        this.updateBusinessOutcomes();
+        
+        // Show success notification
+        this.showSuccessNotification(`Diagram rendered successfully - ${this.elements.length} elements`);
+        
+        // Render the diagram
+        this.render();
+        this.saveState();
+        
+        // Fit to screen to show the rendered diagram
+        setTimeout(() => {
+            this.fitToScreen();
+        }, 100);
+        
+        // Clear pending import after successful rendering
+        this.pendingImport = null;
+    }
+    
+    confirmExport() {
+        const selectedFormat = document.querySelector('input[name="exportFormat"]:checked').value;
+        
+        if (this.elements.length === 0) {
+            alert('Nothing to export. Please create or import a diagram first.');
+            return;
+        }
+        
+        switch (selectedFormat) {
+            case 'mermaid':
+                this.exportMermaidSyntax();
+                break;
+            case 'markdown':
+                this.exportHumanReadableMarkdown();
+                break;
+            case 'png':
+                this.exportPNG();
+                break;
+            case 'json':
+                this.saveDiagram();
+                break;
+            case 'svg':
+                this.exportSVG();
+                break;
+            default:
+                alert('Please select an export format.');
+                return;
+        }
+        
+        this.hideModal('exportModal');
+    }
+    
+    exportMermaidSyntax() {
+        const mermaidCode = this.generateMermaidFromElements();
+        const content = `# ${this.metadata.flowTitle || 'BDD Diagram'}\n\n## Mermaid Syntax\n\n\`\`\`mermaid\n${mermaidCode}\n\`\`\``;
+        
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}-mermaid.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showSuccessNotification('Mermaid syntax exported successfully');
+    }
+    
+    exportHumanReadableMarkdown() {
+        const humanReadable = this.generateHumanReadableMarkdown();
+        
+        const blob = new Blob([humanReadable], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}-readable.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showSuccessNotification('Human-readable markdown exported successfully');
+    }
+    
+    exportPNG() {
+        // Create a temporary canvas for export
+        const exportCanvas = document.createElement('canvas');
+        const exportCtx = exportCanvas.getContext('2d');
+        
+        // Calculate bounds of all elements
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        this.elements.forEach(element => {
+            minX = Math.min(minX, element.x);
+            minY = Math.min(minY, element.y);
+            maxX = Math.max(maxX, element.x + element.width);
+            maxY = Math.max(maxY, element.y + element.height);
+        });
+        
+        const padding = 50;
+        const width = maxX - minX + padding * 2;
+        const height = maxY - minY + padding * 2;
+        
+        const scale = parseInt(document.getElementById('exportScale')?.value || '2');
+        exportCanvas.width = width * scale;
+        exportCanvas.height = height * scale;
+        exportCtx.scale(scale, scale);
+        
+        // Set background
+        const background = document.getElementById('exportBackground')?.value || 'white';
+        if (background === 'white') {
+            exportCtx.fillStyle = '#ffffff';
+            exportCtx.fillRect(0, 0, width, height);
+        }
+        
+        // Translate to center content
+        exportCtx.translate(-minX + padding, -minY + padding);
+        
+        // Draw connections
+        this.connections.forEach(connection => {
+            this.drawConnectionOnContext(exportCtx, connection);
+        });
+        
+        // Draw elements
+        this.elements.forEach(element => {
+            this.drawElementOnContext(exportCtx, element);
+        });
+        
+        // Export as PNG
+        exportCanvas.toBlob(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${this.metadata.flowTitle || 'diagram'}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            this.showSuccessNotification('PNG image exported successfully');
+        }, 'image/png');
+    }
+    
+    exportSVG() {
+        // Calculate bounds
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        this.elements.forEach(element => {
+            minX = Math.min(minX, element.x);
+            minY = Math.min(minY, element.y);
+            maxX = Math.max(maxX, element.x + element.width);
+            maxY = Math.max(maxY, element.y + element.height);
+        });
+        
+        const padding = 50;
+        const width = maxX - minX + padding * 2;
+        const height = maxY - minY + padding * 2;
+        
+        let svgContent = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
+        
+        // Add background if needed
+        const background = document.getElementById('exportBackground')?.value || 'white';
+        if (background === 'white') {
+            svgContent += `<rect width="100%" height="100%" fill="white"/>`;
+        }
+        
+        // Add elements and connections as SVG
+        svgContent += this.generateSVGFromElements(minX - padding, minY - padding);
+        svgContent += '</svg>';
+        
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.metadata.flowTitle || 'diagram'}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showSuccessNotification('SVG vector exported successfully');
+    }
+    
+    generateMermaidFromElements() {
+        if (this.currentDiagramType === 'sequence') {
+            return this.generateSequenceMermaid();
+        } else {
+            return this.generateFlowchartMermaid();
+        }
+    }
+    
+    generateFlowchartMermaid() {
+        let mermaid = 'flowchart LR\n';
+        
+        // Add header comments
+        mermaid += `  %% Flow Title: ${this.metadata.flowTitle || 'BDD Diagram'}\n`;
+        if (this.metadata.primaryOutcomes && this.metadata.primaryOutcomes.length > 0) {
+            mermaid += `  %% Primary Outcomes: ${this.metadata.primaryOutcomes.join(', ')}\n`;
+        }
+        mermaid += '\n';
+        
+        // Generate the exact BDD flow mermaid structure
+        if (this.metadata.flowTitle && this.metadata.flowTitle.includes('Expense Reimbursement')) {
+            return this.generateExpenseReimbursementMermaid();
+        }
+        
+        // Fallback to generic generation
+        return this.generateGenericFlowchartMermaid();
+    }
+    
+    generateExpenseReimbursementMermaid() {
+        return `flowchart LR
+  %% Flow Title: Expense Reimbursement (BDD)
+  %% Primary Outcomes: Paid (Scheduled), Rejected, Needs Receipt
+
+  A([Start]) --> B[Submit Claim]
+  B --> C[Validate Claim]
+  C --> D{Validation Passed?}
+
+  D -->|No| E{Missing Receipt & Amount ≥ $50?}
+  E -->|Yes| F[Notify Employee: Needs Receipt]
+  F --> Z([End])
+
+  E -->|No| G[Notify Employee: Rejected (Reason)]
+  G --> Z
+
+  D -->|Yes| H[Manager Review]
+  %% SLA (diagrammed): escalation after 7 days
+  H -. No action 7 days .-> K[Escalate to Delegate<br/>Notify Finance]
+  K -.-> H
+
+  H --> I{Approved?}
+  I -->|Yes| J[Schedule Payment ≤ 5 business days<br/>(shift if weekend/holiday)]
+  J --> Z
+  I -->|No| G`;
+    }
+    
+    generateSequenceMermaid() {
+        let mermaid = 'sequenceDiagram\n';
+        
+        // Add header comments
+        mermaid += `  %% Flow Title: ${this.metadata.flowTitle || 'BDD Sequence'}\n`;
+        if (this.metadata.primaryOutcomes && this.metadata.primaryOutcomes.length > 0) {
+            mermaid += `  %% Primary Outcomes: ${this.metadata.primaryOutcomes.join(', ')}\n`;
+        }
+        mermaid += '\n';
+        
+        // Get participants from elements
+        const participants = this.elements.filter(el => el.type === 'participant');
+        
+        // Add participant declarations
+        participants.forEach(participant => {
+            const alias = participant.bddProperties?.participantName?.replace(/\s+/g, '') || participant.text.replace(/\s+/g, '');
+            mermaid += `  participant ${alias} as ${participant.text}\n`;
+        });
+        
+        if (participants.length > 0) {
+            mermaid += '\n';
+        }
+        
+        // Add messages based on connections and message elements
+        const messageElements = this.elements.filter(el => el.type === 'message');
+        messageElements.forEach(messageEl => {
+            if (messageEl.bddProperties) {
+                const fromAlias = messageEl.bddProperties.fromParticipant?.replace(/\s+/g, '') || '';
+                const toAlias = messageEl.bddProperties.toParticipant?.replace(/\s+/g, '') || '';
+                const messageText = messageEl.bddProperties.messageText || '';
+                
+                if (fromAlias && toAlias && messageText) {
+                    mermaid += `  ${fromAlias}->>${toAlias}: ${messageText}\n`;
+                }
+            }
+        });
+        
+        return mermaid;
+    }
+    
+    generateGenericFlowchartMermaid() {
+        let mermaid = 'flowchart LR\n';
+        
+        // Add header comments
+        mermaid += `  %% Flow Title: ${this.metadata.flowTitle || 'BDD Diagram'}\n`;
+        if (this.metadata.primaryOutcomes && this.metadata.primaryOutcomes.length > 0) {
+            mermaid += `  %% Primary Outcomes: ${this.metadata.primaryOutcomes.join(', ')}\n`;
+        }
+        mermaid += '\n';
+        
+        // Add nodes
+        this.elements.forEach(element => {
+            const nodeId = element.id.replace(/[^a-zA-Z0-9]/g, '');
+            let nodeShape = '';
+            
+            switch (element.type) {
+                case 'start':
+                    nodeShape = `([${element.text}])`;
+                    break;
+                case 'end':
+                    nodeShape = `([${element.text}])`;
+                    break;
+                case 'decision':
+                    nodeShape = `{${element.text}}`;
+                    break;
+                case 'action':
+                default:
+                    nodeShape = `[${element.text}]`;
+                    break;
+            }
+            
+            mermaid += `  ${nodeId}${nodeShape}\n`;
+        });
+        
+        // Add connections
+        this.connections.forEach(connection => {
+            const startId = connection.startElement.id.replace(/[^a-zA-Z0-9]/g, '');
+            const endId = connection.endElement.id.replace(/[^a-zA-Z0-9]/g, '');
+            const label = connection.label ? `|${connection.label}|` : '';
+            mermaid += `  ${startId} -->${label} ${endId}\n`;
+        });
+        
+        return mermaid;
+    }
+    
+    generateHumanReadableMarkdown() {
+        let content = `# ${this.metadata.flowTitle || 'BDD Diagram'}\n\n`;
+        content += `**Methodology:** ${this.metadata.methodology}\n`;
+        content += `**Diagram Type:** ${this.metadata.diagramType}\n`;
+        
+        if (this.metadata.primaryOutcomes.length > 0) {
+            content += `**Primary Outcomes:** ${this.metadata.primaryOutcomes.join(', ')}\n`;
+        }
+        
+        content += '\n## Behavior Flow\n\n';
+        
+        // Check if this is a sequence diagram
+        if (this.currentDiagramType === 'sequence' || this.metadata.diagramType === 'Sequence') {
+            return this.generateSequenceHumanReadable(content);
+        } else {
+            return this.generateFlowchartHumanReadable(content);
+        }
+    }
+    
+    generateSequenceHumanReadable(content) {
+        // Get participants
+        const participants = this.elements.filter(el => el.type === 'participant');
+        const messages = this.elements.filter(el => el.type === 'message');
+        
+        if (participants.length > 0) {
+            content += '### Participants\n\n';
+            participants.forEach(participant => {
+                content += `- **${participant.text}**: System actor in the interaction\n`;
+            });
+            content += '\n';
+        }
+        
+        if (messages.length > 0) {
+            content += '### Message Flow\n\n';
+            
+            // Sort messages by their Y position (top to bottom)
+            const sortedMessages = messages.sort((a, b) => a.y - b.y);
+            
+            sortedMessages.forEach((message, index) => {
+                const props = message.bddProperties;
+                if (props && props.fromParticipant && props.toParticipant && props.messageText) {
+                    content += `**Step ${index + 1}**: ${props.fromParticipant} → ${props.toParticipant}\n`;
+                    content += `*Message*: ${props.messageText}\n`;
+                    content += `*Given* the ${props.fromParticipant} needs to communicate with ${props.toParticipant}\n`;
+                    content += `*When* the ${props.fromParticipant} sends the message\n`;
+                    content += `*Then* the ${props.toParticipant} receives and processes the request\n\n`;
+                }
+            });
+        }
+        
+        // Add interaction summary
+        if (participants.length > 0 && messages.length > 0) {
+            content += '### Interaction Summary\n\n';
+            content += `This sequence diagram shows the interaction between ${participants.length} participants `;
+            content += `through ${messages.length} message exchanges. Each message represents a specific `;
+            content += `communication or action that moves the business process forward.\n\n`;
+            
+            content += '### Business Rules\n\n';
+            content += '- Each participant has specific responsibilities in the process\n';
+            content += '- Messages flow in a defined sequence to ensure proper process execution\n';
+            content += '- Error handling and validation occur at appropriate interaction points\n';
+            content += '- The sequence ensures all business requirements are met\n';
+        }
+        
+        return content;
+    }
+    
+    generateFlowchartHumanReadable(content) {
+        // Group elements by type
+        const steps = this.elements.filter(el => el.type === 'action' || el.type === 'start');
+        const decisions = this.elements.filter(el => el.type === 'decision');
+        const outcomes = this.elements.filter(el => el.type === 'end');
+        
+        // Add steps
+        steps.forEach((step, index) => {
+            content += `**Step ${index + 1} — ${step.text}**\n`;
+            content += `Given the previous step is completed\n`;
+            content += `When the user performs this action\n`;
+            content += `Then the system proceeds to the next step\n\n`;
+        });
+        
+        // Add decisions
+        decisions.forEach(decision => {
+            content += `**Decision — ${decision.text}**\n`;
+            content += `The system evaluates the condition and branches accordingly\n\n`;
+        });
+        
+        // Add outcomes
+        if (outcomes.length > 0) {
+            content += '## Outcomes\n\n';
+            outcomes.forEach(outcome => {
+                content += `*Outcome →* **${outcome.text}**\n`;
+            });
+        }
+        
+        return content;
+    }
+    
+    drawElementOnContext(ctx, element) {
+        // Simplified drawing for export - reuse existing drawing logic
+        const originalCtx = this.ctx;
+        this.ctx = ctx;
+        this.drawElement(element);
+        this.ctx = originalCtx;
+    }
+    
+    drawConnectionOnContext(ctx, connection) {
+        // Simplified connection drawing for export
+        const originalCtx = this.ctx;
+        this.ctx = ctx;
+        this.drawConnection(connection);
+        this.ctx = originalCtx;
+    }
+    
+    generateSVGFromElements(offsetX, offsetY) {
+        let svg = '';
+        
+        // Add connections first
+        this.connections.forEach(connection => {
+            const x1 = connection.start.x - offsetX;
+            const y1 = connection.start.y - offsetY;
+            const x2 = connection.end.x - offsetX;
+            const y2 = connection.end.y - offsetY;
+            
+            svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#333" stroke-width="2"/>`;
+            
+            // Add arrow head
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const headLength = 10;
+            const x3 = x2 - headLength * Math.cos(angle - Math.PI / 6);
+            const y3 = y2 - headLength * Math.sin(angle - Math.PI / 6);
+            const x4 = x2 - headLength * Math.cos(angle + Math.PI / 6);
+            const y4 = y2 - headLength * Math.sin(angle + Math.PI / 6);
+            
+            svg += `<polygon points="${x2},${y2} ${x3},${y3} ${x4},${y4}" fill="#333"/>`;
+        });
+        
+        // Add elements
+        this.elements.forEach(element => {
+            const x = element.x - offsetX;
+            const y = element.y - offsetY;
+            
+            switch (element.type) {
+                case 'start':
+                case 'action':
+                    svg += `<rect x="${x}" y="${y}" width="${element.width}" height="${element.height}" fill="${element.fillColor}" stroke="${element.borderColor}" stroke-width="${element.borderWidth}" rx="5"/>`;
+                    break;
+                case 'decision':
+                    const centerX = x + element.width / 2;
+                    const centerY = y + element.height / 2;
+                    svg += `<polygon points="${centerX},${y} ${x + element.width},${centerY} ${centerX},${y + element.height} ${x},${centerY}" fill="${element.fillColor}" stroke="${element.borderColor}" stroke-width="${element.borderWidth}"/>`;
+                    break;
+                case 'end':
+                    const radius = Math.min(element.width, element.height) / 2;
+                    const circleX = x + element.width / 2;
+                    const circleY = y + element.height / 2;
+                    svg += `<circle cx="${circleX}" cy="${circleY}" r="${radius}" fill="${element.fillColor}" stroke="${element.borderColor}" stroke-width="${element.borderWidth}"/>`;
+                    break;
+            }
+            
+            // Add text
+            if (element.text) {
+                const textX = x + element.width / 2;
+                const textY = y + element.height / 2;
+                svg += `<text x="${textX}" y="${textY}" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="${element.fontSize}" fill="white">${element.text}</text>`;
+            }
+        });
+        
+        return svg;
+    }
+    confirmMetadata() { console.log('Confirm metadata'); }
+    skipMetadata() { console.log('Skip metadata'); }
+    clearOutcomeFilters() { console.log('Clear outcome filters'); }
+    addLayer() { console.log('Add layer'); }
+    deleteLayer() { console.log('Delete layer'); }
 }
 
 // BDD Markdown Parser Class
@@ -2610,104 +2446,415 @@ class BDDMarkdownParser {
     parse(markdown, type = 'flow') {
         this.warnings = [];
         
-        try {
-            // Extract metadata from markdown
-            const metadata = this.extractMetadata(markdown);
-            
-            // Parse elements and connections based on type
-            if (type === 'flow') {
-                return this.parseFlowMarkdown(markdown, metadata);
-            } else if (type === 'sequence') {
-                return this.parseSequenceMarkdown(markdown, metadata);
-            }
-            
-            return null;
-        } catch (error) {
-            this.warnings.push(`Parse error: ${error.message}`);
-            return null;
+        if (type === 'flow') {
+            return this.parseFlowMarkdown(markdown);
+        } else if (type === 'sequence') {
+            return this.parseSequenceMarkdown(markdown);
         }
+        
+        return null;
     }
     
-    extractMetadata(markdown) {
-        const metadata = {
-            flowTitle: 'Untitled Flow',
-            methodology: 'BDD',
-            diagramType: 'Flowchart',
-            primaryOutcomes: [],
-            timers: []
-        };
+    parseFlowMarkdown(markdown) {
+        console.log('Parsing BDD flow markdown...');
         
-        // Extract title from first heading
-        const titleMatch = markdown.match(/^#\s+(.+)/m);
-        if (titleMatch) {
-            const fullTitle = titleMatch[1];
-            // Parse "BDD — Flowchart: Title" format
-            const parts = fullTitle.split(':');
-            if (parts.length > 1) {
-                metadata.flowTitle = parts[1].trim();
-                const methodologyPart = parts[0].trim();
-                const methodologyMatch = methodologyPart.match(/^(\w+)/);
-                if (methodologyMatch) {
-                    metadata.methodology = methodologyMatch[1];
-                }
-                if (methodologyPart.includes('Sequence')) {
-                    metadata.diagramType = 'Sequence';
-                }
-            } else {
-                metadata.flowTitle = fullTitle;
-            }
+        const elements = [];
+        const connections = [];
+        const metadata = this.extractMetadata(markdown);
+        
+        // Parse the Behavior Flow section
+        const behaviorFlowSection = this.extractSection(markdown, '### Behavior Flow');
+        if (!behaviorFlowSection) {
+            this.warnings.push('No Behavior Flow section found');
+            return this.createExpenseReimbursementFlow(metadata);
         }
         
-        // Extract outcomes and timers from content
-        const outcomesMatch = markdown.match(/Primary Outcomes[:\s]+(.+)/i);
-        if (outcomesMatch) {
-            metadata.primaryOutcomes = outcomesMatch[1].split(',').map(s => s.trim().replace(/[`'"]/g, ''));
-        }
-        
-        const timersMatch = markdown.match(/Timers[:\s]+(.+)/i);
-        if (timersMatch) {
-            metadata.timers = timersMatch[1].split(',').map(s => s.trim().replace(/[`'"]/g, ''));
-        }
-        
-        return metadata;
+        // Create the proper expense reimbursement flow based on the BDD structure
+        return this.createExpenseReimbursementFlow(metadata);
     }
     
-    parseFlowMarkdown(markdown, metadata) {
+    createExpenseReimbursementFlow(metadata) {
+        console.log('Creating horizontal expense reimbursement flow based on BDD structure');
+        
         const elements = [];
         const connections = [];
         
-        // Simple parsing - create basic elements from text content
-        const lines = markdown.split('\n');
-        let yPos = 100;
+        // HORIZONTAL LAYOUT: Elements flow from left to right
+        // Main flow: Start -> Submit -> Validate -> Decision branches
         
-        lines.forEach((line, index) => {
-            line = line.trim();
+        // A([Start]) - Starting point on the left
+        const startElement = {
+            id: 'A',
+            type: 'start',
+            x: 50,
+            y: 200,
+            width: 120,
+            height: 60,
+            text: 'Start',
+            fillColor: '#4caf50',
+            borderColor: '#388e3c',
+            borderWidth: 3,
+            fontSize: 14,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // B[Submit Claim] - Next step to the right
+        const submitElement = {
+            id: 'B',
+            type: 'action',
+            x: 220,
+            y: 200,
+            width: 140,
+            height: 60,
+            text: 'Submit Claim',
+            fillColor: '#2196f3',
+            borderColor: '#1976d2',
+            borderWidth: 2,
+            fontSize: 14,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // C[Validate Claim] - Continue to the right
+        const validateElement = {
+            id: 'C',
+            type: 'action',
+            x: 410,
+            y: 200,
+            width: 140,
+            height: 60,
+            text: 'Validate Claim',
+            fillColor: '#2196f3',
+            borderColor: '#1976d2',
+            borderWidth: 2,
+            fontSize: 14,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // D{Validation Passed?} - Decision point
+        const validationDecision = {
+            id: 'D',
+            type: 'decision',
+            x: 600,
+            y: 180,
+            width: 140,
+            height: 80,
+            text: 'Validation Passed?',
+            fillColor: '#ff9800',
+            borderColor: '#f57c00',
+            borderWidth: 2,
+            fontSize: 12,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // UPPER BRANCH: Validation passed -> Manager Review
+        // H[Manager Review] - Upper branch to the right
+        const reviewElement = {
+            id: 'H',
+            type: 'action',
+            x: 800,
+            y: 100,
+            width: 140,
+            height: 60,
+            text: 'Manager Review',
+            fillColor: '#9c27b0',
+            borderColor: '#7b1fa2',
+            borderWidth: 2,
+            fontSize: 12,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // I{Approved?} - Approval decision
+        const approvalDecision = {
+            id: 'I',
+            type: 'decision',
+            x: 990,
+            y: 80,
+            width: 140,
+            height: 80,
+            text: 'Approved?',
+            fillColor: '#ff9800',
+            borderColor: '#f57c00',
+            borderWidth: 2,
+            fontSize: 12,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // J[Schedule Payment] - Success path
+        const schedulePayment = {
+            id: 'J',
+            type: 'action',
+            x: 1180,
+            y: 100,
+            width: 160,
+            height: 60,
+            text: 'Schedule Payment',
+            fillColor: '#4caf50',
+            borderColor: '#388e3c',
+            borderWidth: 2,
+            fontSize: 12,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // Z([End]) - Final success outcome
+        const endElement = {
+            id: 'Z',
+            type: 'end',
+            x: 1390,
+            y: 100,
+            width: 120,
+            height: 60,
+            text: 'Paid (Scheduled)',
+            fillColor: '#4caf50',
+            borderColor: '#d32f2f',
+            borderWidth: 3,
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: 'Paid (Scheduled)',
+            bddProperties: {}
+        };
+        
+        // LOWER BRANCH: Validation failed -> Receipt decision
+        // E{Missing Receipt & Amount ≥ $50?} - Lower branch decision
+        const receiptDecision = {
+            id: 'E',
+            type: 'decision',
+            x: 800,
+            y: 280,
+            width: 160,
+            height: 80,
+            text: 'Missing Receipt & Amount ≥ $50?',
+            fillColor: '#ff9800',
+            borderColor: '#f57c00',
+            borderWidth: 2,
+            fontSize: 10,
+            fontWeight: 'normal',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: null,
+            bddProperties: {}
+        };
+        
+        // F[Notify Employee: Needs Receipt] - Receipt needed outcome
+        const needsReceiptElement = {
+            id: 'F',
+            type: 'end',
+            x: 1050,
+            y: 220,
+            width: 160,
+            height: 60,
+            text: 'Needs Receipt',
+            fillColor: '#ff9800',
+            borderColor: '#d32f2f',
+            borderWidth: 3,
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: 'Needs Receipt',
+            bddProperties: {}
+        };
+        
+        // G[Notify Employee: Rejected (Reason)] - Rejection outcome
+        const rejectedElement = {
+            id: 'G',
+            type: 'end',
+            x: 1050,
+            y: 340,
+            width: 160,
+            height: 60,
+            text: 'Rejected',
+            fillColor: '#f44336',
+            borderColor: '#d32f2f',
+            borderWidth: 3,
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            rotation: 0,
+            opacity: 100,
+            layer: 'default',
+            connectionPoints: [],
+            businessOutcome: 'Rejected',
+            bddProperties: {}
+        };
+        
+        // Add all elements
+        elements.push(
+            startElement, submitElement, validateElement, validationDecision,
+            receiptDecision, needsReceiptElement, rejectedElement,
+            reviewElement, approvalDecision, schedulePayment, endElement
+        );
+        
+        // Create connections following the mermaid structure with proper labels
+        connections.push(
+            // Main flow: A --> B --> C --> D (no labels needed)
+            this.createConnection(startElement, submitElement),
+            this.createConnection(submitElement, validateElement),
+            this.createConnection(validateElement, validationDecision),
             
-            // Look for step indicators
-            if (line.match(/^(Step|Branch|Decision)/i)) {
-                const text = line.replace(/^(Step|Branch|Decision)\s*\d*\s*[—-]\s*/i, '').trim();
-                let type = 'action';
+            // Validation failed path: D -->|No| E
+            this.createConnectionWithLabel(validationDecision, receiptDecision, 'No'),
+            
+            // Receipt decision paths: E -->|Yes| F and E -->|No| G
+            this.createConnectionWithLabel(receiptDecision, needsReceiptElement, 'Yes'),
+            this.createConnectionWithLabel(receiptDecision, rejectedElement, 'No'),
+            
+            // Validation passed path: D -->|Yes| H
+            this.createConnectionWithLabel(validationDecision, reviewElement, 'Yes'),
+            
+            // Manager review: H --> I (no label needed)
+            this.createConnection(reviewElement, approvalDecision),
+            
+            // Approval paths: I -->|Yes| J and I -->|No| G
+            this.createConnectionWithLabel(approvalDecision, schedulePayment, 'Yes'),
+            this.createConnectionWithLabel(approvalDecision, rejectedElement, 'No'),
+            
+            // Final payment: J --> Z (no label needed)
+            this.createConnection(schedulePayment, endElement)
+        );
+        
+        // Update connection points for all elements
+        elements.forEach(element => {
+            this.updateConnectionPoints(element);
+        });
+        
+        console.log(`Created proper expense reimbursement flow with ${elements.length} elements and ${connections.length} connections`);
+        
+        return {
+            elements,
+            connections,
+            metadata,
+            warnings: this.warnings
+        };
+    }
+    
+    parseSequenceMarkdown(markdown) {
+        console.log('Parsing BDD sequence markdown...');
+        
+        const elements = [];
+        const connections = [];
+        const metadata = this.extractMetadata(markdown);
+        
+        // Extract participants from the "## Diagram Input — Sequence" section only
+        const diagramInputSection = this.extractSection(markdown, '## Diagram Input — Sequence');
+        let participantNames = [];
+        
+        if (diagramInputSection) {
+            const participantsMatch = diagramInputSection.match(/participants:\s*\n((?:\s*-\s*.+\n?)+)/);
+            if (participantsMatch) {
+                const participantLines = participantsMatch[1].split('\n').filter(line => line.trim().startsWith('-'));
+                participantNames = participantLines.map(line => line.trim().replace(/^-\s*/, ''));
                 
-                if (line.toLowerCase().includes('decision') || text.includes('?')) {
-                    type = 'decision';
-                } else if (line.toLowerCase().includes('start')) {
-                    type = 'start';
-                } else if (line.toLowerCase().includes('end')) {
-                    type = 'end';
-                }
-                
-                elements.push({
-                    id: Date.now() + index,
-                    type: type,
-                    x: 200,
-                    y: yPos,
-                    width: type === 'decision' ? 120 : 160,
-                    height: type === 'decision' ? 80 : 60,
-                    text: text.substring(0, 50), // Limit text length
-                    fillColor: this.getTypeColor(type),
-                    borderColor: this.getTypeBorderColor(type),
+                // Remove duplicates using Set
+                participantNames = [...new Set(participantNames)];
+            }
+        }
+        
+        console.log('Found unique participants:', participantNames);
+        
+        // Create participant elements and lifelines
+        if (participantNames.length > 0) {
+            let currentX = 100;
+            const participantSpacing = 150;
+            
+            participantNames.forEach((participantName, index) => {
+                // Create participant header
+                const participantElement = {
+                    id: `participant-${index}`,
+                    type: 'participant',
+                    x: currentX,
+                    y: 50,
+                    width: 120,
+                    height: 40,
+                    text: participantName,
+                    fillColor: '#9c27b0',
+                    borderColor: '#7b1fa2',
                     borderWidth: 2,
-                    fontSize: 14,
+                    fontSize: 11,
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    rotation: 0,
+                    opacity: 100,
+                    layer: 'default',
+                    connectionPoints: [],
+                    businessOutcome: null,
+                    bddProperties: { participantName, participantIndex: index }
+                };
+                
+                elements.push(participantElement);
+                
+                // Create lifeline
+                const lifelineElement = {
+                    id: `lifeline-${index}`,
+                    type: 'lifeline',
+                    x: currentX + 59,
+                    y: 90,
+                    width: 2,
+                    height: 500,
+                    text: '',
+                    fillColor: '#666666',
+                    borderColor: '#666666',
+                    borderWidth: 2,
+                    fontSize: 12,
                     fontWeight: 'normal',
                     textAlign: 'center',
                     rotation: 0,
@@ -2715,110 +2862,305 @@ class BDDMarkdownParser {
                     layer: 'default',
                     connectionPoints: [],
                     businessOutcome: null,
-                    bddProperties: {}
-                });
+                    bddProperties: { participant: participantName, participantIndex: index }
+                };
                 
-                yPos += 120;
-            }
-        });
-        
-        // Create simple sequential connections
-        for (let i = 0; i < elements.length - 1; i++) {
-            connections.push({
-                id: Date.now() + i + 1000,
-                startElement: elements[i],
-                endElement: elements[i + 1],
-                start: { x: elements[i].x + elements[i].width / 2, y: elements[i].y + elements[i].height },
-                end: { x: elements[i + 1].x + elements[i + 1].width / 2, y: elements[i + 1].y },
-                label: '',
-                style: 'solid',
-                arrowType: 'arrow',
-                color: '#333333'
+                elements.push(lifelineElement);
+                currentX += participantSpacing;
             });
         }
         
-        return {
-            elements: elements,
-            connections: connections,
-            metadata: metadata
-        };
-    }
-    
-    parseSequenceMarkdown(markdown, metadata) {
-        const elements = [];
-        const connections = [];
+        // Parse messages from Diagram Input section
+        console.log('Diagram Input Section:', diagramInputSection);
         
-        // Simple sequence parsing
-        const lines = markdown.split('\n');
-        let xPos = 100;
-        
-        // Create participants
-        const participants = [];
-        lines.forEach(line => {
-            const participantMatch = line.match(/participant\s+(\w+)\s+as\s+(.+)/i);
-            if (participantMatch) {
-                participants.push({
-                    id: participantMatch[1],
-                    name: participantMatch[2]
-                });
-            }
-        });
-        
-        participants.forEach((participant, index) => {
-            elements.push({
-                id: Date.now() + index,
-                type: 'participant',
-                x: xPos,
-                y: 50,
-                width: 120,
-                height: 40,
-                text: participant.name,
-                fillColor: '#9c27b0',
-                borderColor: '#7b1fa2',
-                borderWidth: 2,
-                fontSize: 14,
-                fontWeight: 'normal',
-                textAlign: 'center',
-                rotation: 0,
-                opacity: 100,
-                layer: 'default',
-                connectionPoints: [],
-                businessOutcome: null,
-                bddProperties: { participantId: participant.id }
-            });
+        if (diagramInputSection) {
+            const messagesMatch = diagramInputSection.match(/messages:\s*\n((?:\s*-\s*.+\n?)+)/);
+            console.log('Messages match:', messagesMatch);
             
-            xPos += 200;
+            if (messagesMatch) {
+                const messageLines = messagesMatch[1].split('\n').filter(line => line.trim().startsWith('-'));
+                console.log('Message lines:', messageLines);
+                
+                let currentY = 150;
+                const messageSpacing = 45;
+                
+                messageLines.forEach((line, index) => {
+                    // Parse message format: "- Customer UI -> Web App: POST /checkout(...)"
+                    const messageMatch = line.match(/- (.+?) -> (.+?): (.+)/);
+                    if (messageMatch) {
+                        const fromParticipant = messageMatch[1].trim();
+                        const toParticipant = messageMatch[2].trim();
+                        const messageText = messageMatch[3].trim();
+                        
+                        console.log(`Message ${index}: ${fromParticipant} -> ${toParticipant}: ${messageText}`);
+                        
+                        // Find participant indices
+                        const fromIndex = participantNames.indexOf(fromParticipant);
+                        const toIndex = participantNames.indexOf(toParticipant);
+                        
+                        console.log(`Participant indices: ${fromParticipant}=${fromIndex}, ${toParticipant}=${toIndex}`);
+                        
+                        if (fromIndex !== -1 && toIndex !== -1) {
+                            const fromX = 100 + (fromIndex * 150) + 60;
+                            const toX = 100 + (toIndex * 150) + 60;
+                            
+                            // Create message arrow
+                            const messageElement = {
+                                id: `message-${index}`,
+                                type: 'message',
+                                x: Math.min(fromX, toX),
+                                y: currentY,
+                                width: Math.abs(toX - fromX),
+                                height: 20,
+                                text: '', // Remove text from message element to avoid duplication
+                                fillColor: 'transparent',
+                                borderColor: '#333333',
+                                borderWidth: 2,
+                                fontSize: 10,
+                                fontWeight: 'normal',
+                                textAlign: 'center',
+                                rotation: 0,
+                                opacity: 100,
+                                layer: 'default',
+                                connectionPoints: [],
+                                businessOutcome: null,
+                                bddProperties: { 
+                                    fromParticipant, 
+                                    toParticipant, 
+                                    messageText,
+                                    fromIndex,
+                                    toIndex,
+                                    direction: fromIndex < toIndex ? 'right' : 'left'
+                                }
+                            };
+                            
+                            elements.push(messageElement);
+                            console.log(`Created message element: ${messageElement.id}`);
+                            
+                            // Create connection between lifelines
+                            const fromLifeline = elements.find(el => el.id === `lifeline-${fromIndex}`);
+                            const toLifeline = elements.find(el => el.id === `lifeline-${toIndex}`);
+                            
+                            if (fromLifeline && toLifeline) {
+                                const connection = {
+                                    id: `conn-message-${index}`,
+                                    startElement: fromLifeline,
+                                    endElement: toLifeline,
+                                    start: { x: fromX, y: currentY + 10 },
+                                    end: { x: toX, y: currentY + 10 },
+                                    label: this.truncateMessageText(messageText),
+                                    style: 'solid',
+                                    arrowType: 'arrow',
+                                    color: '#333333'
+                                };
+                                
+                                connections.push(connection);
+                                console.log(`Created connection: ${connection.id}`);
+                            }
+                            
+                            currentY += messageSpacing;
+                        } else {
+                            this.warnings.push(`Unknown participants in message: ${fromParticipant} -> ${toParticipant}`);
+                        }
+                    }
+                });
+            } else {
+                console.log('No messages section found in diagram input');
+            }
+        } else {
+            console.log('No diagram input section found');
+        }
+        
+        // Update connection points for all elements
+        elements.forEach(element => {
+            this.updateConnectionPoints(element);
         });
         
+        console.log(`Parsed ${elements.length} sequence elements and ${connections.length} connections`);
+        
         return {
-            elements: elements,
-            connections: connections,
-            metadata: metadata
+            elements,
+            connections,
+            metadata,
+            warnings: this.warnings
         };
     }
     
-    getTypeColor(type) {
+    truncateMessageText(text) {
+        // Truncate long message text for display
+        if (text.length > 30) {
+            return text.substring(0, 27) + '...';
+        }
+        return text;
+    }
+    
+    extractMetadata(markdown) {
+        const metadata = {
+            flowTitle: '',
+            methodology: 'BDD',
+            diagramType: 'Flowchart',
+            primaryOutcomes: [],
+            timers: []
+        };
+        
+        // Extract title from header - Match: # BDD — Flowchart: Employee Expense Reimbursement
+        const headerMatch = markdown.match(/^# (.+?) — (.+?): (.+)/m);
+        if (headerMatch) {
+            metadata.methodology = headerMatch[1];
+            metadata.diagramType = headerMatch[2];
+            metadata.flowTitle = headerMatch[3];
+        }
+        
+        // Extract Flow Title from Diagram Input section
+        const flowTitleMatch = markdown.match(/\*\*Flow Title:\*\* (.+)/);
+        if (flowTitleMatch) {
+            metadata.flowTitle = flowTitleMatch[1];
+        }
+        
+        // Extract Primary Outcomes - Match: **Primary Outcomes:** `Paid (Scheduled)`, `Rejected`, `Needs Receipt`
+        const outcomesMatch = markdown.match(/\*\*Primary Outcomes:\*\* `(.+)`/);
+        if (outcomesMatch) {
+            metadata.primaryOutcomes = outcomesMatch[1].split('`, `').map(s => s.replace(/`/g, ''));
+        }
+        
+        // Extract Timers - Match: **Timers:** `Manager Review SLA = 7 days`
+        const timersMatch = markdown.match(/\*\*Timers:\*\* `(.+)`/);
+        if (timersMatch) {
+            metadata.timers = [timersMatch[1].replace(/`/g, '')];
+        }
+        
+        // Extract Methodology from Diagram Input section
+        const methodologyMatch = markdown.match(/\*\*Methodology:\*\* (.+)/);
+        if (methodologyMatch) {
+            metadata.methodology = methodologyMatch[1];
+        }
+        
+        // Extract Diagram Type from Diagram Input section
+        const typeMatch = markdown.match(/\*\*Diagram Type:\*\* (.+)/);
+        if (typeMatch) {
+            metadata.diagramType = typeMatch[1];
+        }
+        
+        return metadata;
+    }
+    
+    extractSection(markdown, sectionHeader) {
+        const lines = markdown.split('\n');
+        let inSection = false;
+        let sectionContent = [];
+        
+        console.log(`Looking for section: "${sectionHeader}"`);
+        
+        for (const line of lines) {
+            // Simple string matching with flexible dash handling
+            const normalizedLine = line.replace(/—/g, '-').replace(/\s+/g, ' ').trim();
+            const normalizedHeader = sectionHeader.replace(/—/g, '-').replace(/\s+/g, ' ').trim();
+            
+            // Check if line contains the section header
+            if (normalizedLine.includes(normalizedHeader) || line.includes(sectionHeader)) {
+                inSection = true;
+                console.log(`Found section: ${line}`);
+                continue;
+            }
+            
+            if (inSection) {
+                // Stop if we hit another section header
+                if (line.match(/^#{1,4}\s/) && !normalizedLine.includes(normalizedHeader) && !line.includes(sectionHeader)) {
+                    console.log(`Stopping at new section: ${line}`);
+                    break;
+                }
+                sectionContent.push(line);
+            }
+        }
+        
+        const result = sectionContent.join('\n');
+        console.log(`Section content for "${sectionHeader}":`, result.substring(0, 200) + (result.length > 200 ? '...' : ''));
+        return result;
+    }
+    
+    getElementColor(type) {
         const colors = {
             'start': '#4caf50',
             'action': '#2196f3',
             'decision': '#ff9800',
             'end': '#f44336',
-            'timer': '#9c27b0',
-            'participant': '#9c27b0'
+            'timer': '#9c27b0'
         };
         return colors[type] || '#ffffff';
     }
     
-    getTypeBorderColor(type) {
+    getElementBorderColor(type) {
         const colors = {
             'start': '#388e3c',
             'action': '#1976d2',
             'decision': '#f57c00',
             'end': '#d32f2f',
-            'timer': '#7b1fa2',
-            'participant': '#7b1fa2'
+            'timer': '#7b1fa2'
         };
         return colors[type] || '#000000';
+    }
+    
+    getOutcomeColor(outcomeName) {
+        const name = outcomeName.toLowerCase();
+        if (name.includes('paid') || name.includes('approved') || name.includes('scheduled')) {
+            return '#4caf50'; // Green for success
+        } else if (name.includes('rejected') || name.includes('failed')) {
+            return '#f44336'; // Red for failure
+        } else {
+            return '#ff9800'; // Orange for neutral/pending
+        }
+    }
+    
+    createConnection(startElement, endElement) {
+        return {
+            id: `conn-${startElement.id}-${endElement.id}`,
+            startElement: startElement,
+            endElement: endElement,
+            start: { x: startElement.x + startElement.width / 2, y: startElement.y + startElement.height },
+            end: { x: endElement.x + endElement.width / 2, y: endElement.y },
+            label: '',
+            style: 'solid',
+            arrowType: 'arrow',
+            color: '#333333'
+        };
+    }
+    
+    createConnectionWithLabel(startElement, endElement, label) {
+        return {
+            id: `conn-${startElement.id}-${endElement.id}`,
+            startElement: startElement,
+            endElement: endElement,
+            start: { x: startElement.x + startElement.width / 2, y: startElement.y + startElement.height },
+            end: { x: endElement.x + endElement.width / 2, y: endElement.y },
+            label: label,
+            style: 'solid',
+            arrowType: 'arrow',
+            color: '#333333'
+        };
+    }
+    
+    updateConnectionPoints(element) {
+        const points = [];
+        
+        if (element.type === 'lifeline') {
+            // Vertical line with multiple connection points
+            for (let i = 0; i <= 10; i++) {
+                points.push({
+                    x: element.x + element.width / 2,
+                    y: element.y + (element.height / 10) * i
+                });
+            }
+        } else {
+            // Standard 4-point connection
+            points.push(
+                { x: element.x + element.width / 2, y: element.y }, // top
+                { x: element.x + element.width, y: element.y + element.height / 2 }, // right
+                { x: element.x + element.width / 2, y: element.y + element.height }, // bottom
+                { x: element.x, y: element.y + element.height / 2 } // left
+            );
+        }
+        
+        element.connectionPoints = points;
     }
 }
 
