@@ -69,18 +69,50 @@ This entire process happens automatically in one smooth workflow, eliminating th
 - **Vertical alignment**: Decision branches use Y-offset positioning
 - **Mermaid export**: All flowcharts use `flowchart LR` syntax
 
-### Horizontal Coordinate Mapping
-```javascript
-// HORIZONTAL LAYOUT: Elements flow from left to right
-const startElement = { x: 50, y: 200, width: 120, height: 60 };      // Left start
-const submitElement = { x: 220, y: 200, width: 140, height: 60 };    // Next right
-const validateElement = { x: 410, y: 200, width: 140, height: 60 };  // Continue right
-const decisionElement = { x: 600, y: 180, width: 140, height: 80 };  // Decision point
+# BDD — Feature: Horizontal Coordinate Mapping (Left→Right flow with vertical branches)
 
-// VERTICAL BRANCHING: Decision outcomes use Y-offset
-const upperBranch = { x: 800, y: 100 };  // Yes path (upper)
-const lowerBranch = { x: 800, y: 280 };  // No path (lower)
-```
+Background:
+  Given the diagram uses a horizontal layout (Left→Right)
+  And the main flow baseline Y is 200
+  And coordinates are absolute pixels from the top-left of the canvas
+
+@mainlane
+Scenario Outline: Place core flow elements left-to-right on the main lane
+  Given a <element> to place on the flow
+  When the layout engine assigns coordinates
+  Then x = <x> and y = 200
+  And width = <w> and height = <h>
+  And elements appear left-to-right in the order Start → Submit → Validate
+
+  Examples:
+    | element  | x   | w   | h  |
+    | Start    | 50  | 120 | 60 |
+    | Submit   | 220 | 140 | 60 |
+    | Validate | 410 | 140 | 60 |
+
+@decision
+Scenario: Position the decision node slightly above the main lane
+  Given a Decision element follows Validate
+  When the layout engine assigns coordinates
+  Then x = 600 and y = 180
+  And width = 140 and height = 80
+  And the decision visually precedes the branch split
+
+@branches
+Scenario: Route Yes/No outcomes using vertical offsets from the decision
+  Given a branch anchor X of 800 for the decision outcomes
+  When mapping branch targets
+  Then the **Yes** target is at (x=800, y=100)  # upper branch
+  And the **No** target is at (x=800, y=280)   # lower branch
+
+@acceptance
+Scenario: Visual and semantic guarantees
+  Given the elements and branches are positioned
+  Then the main flow reads left→right along Y=200 without overlap
+  And the decision sits 20px above the main lane (y=180) with height 80
+  And “Yes” edges connect to the upper target at (800, 100)
+  And “No” edges connect to the lower target at (800, 280)
+
 
 ### Benefits of Horizontal Layout
 - **Natural reading flow**: Left-to-right matches reading patterns
@@ -281,19 +313,60 @@ Then the documentation **describes the decision logic** with clear branching exp
 - **Export formats**: Both Mermaid sequence syntax and rich human-readable documentation
 
 ### Sequence Layout System
-```javascript
-// Participant positioning (horizontal spacing)
-participantX = 100 + (participantIndex * 150);
-participantY = 50;
+# BDD — Feature: Sequence Layout System (Participants, Lifelines, Messages)
 
-// Lifeline positioning (vertical extension)
-lifelineX = participantX + 59; // Center under participant
-lifelineY = 90;
-lifelineHeight = 500;
+Background:
+  Given a sequence diagram canvas
+  And participants are indexed from 0 as participantIndex
+  And messages are ordered by messageIndex starting at 0
 
-// Message positioning (chronological flow)
-messageY = 150 + (messageIndex * 45); // Top to bottom
-```
+@participants
+Scenario Outline: Position participants left-to-right with even spacing
+  Given a participant with participantIndex = <idx>
+  When the layout is computed
+  Then participantX equals 100 plus (participantIndex × 150)
+  And participantY equals 50
+  And participants appear left-to-right in index order without overlap
+
+  Examples:
+    | idx | participantX | participantY |
+    | 0   | 100          | 50           |
+    | 1   | 250          | 50           |
+    | 2   | 400          | 50           |
+
+@lifelines
+Scenario Outline: Center each lifeline under its participant and extend downward
+  Given a participant positioned at (participantX, 50)
+  When the lifeline is drawn
+  Then lifelineX equals participantX plus 59   # centered beneath participant label
+  And lifelineY equals 90                      # lifeline starts below the header
+  And lifelineHeight equals 500                # fixed vertical extent
+
+  Examples:
+    | participantX | lifelineX | lifelineY | lifelineHeight |
+    | 100          | 159       | 90        | 500            |
+    | 250          | 309       | 90        | 500            |
+
+@messages
+Scenario Outline: Place messages top-to-bottom in chronological order
+  Given a message with messageIndex = <midx>
+  When the message position is computed
+  Then messageY equals 150 plus (messageIndex × 45)
+  And later messages appear strictly below earlier ones
+
+  Examples:
+    | midx | messageY |
+    | 0    | 150      |
+    | 1    | 195      |
+    | 5    | 375      |
+
+@acceptance
+Scenario: Visual consistency and ordering guarantees
+  Given participants, lifelines, and messages are laid out
+  Then participants are evenly spaced with a 100px left margin and a 150px step
+  And each lifeline is centered under its participant (offset +59), begins at Y=90, and has height 500
+  And messages stack from Y=150 downward in 45px increments following chronological order
+
 
 **Scenario: Import sequence diagram with auto-rendering**  
 Given a `.md` file with sequence diagram structure containing participants and messages  
@@ -395,29 +468,210 @@ And **Yes/No labels** are visible at connection midpoints
 And **branch paths** are visually distinct with proper spacing
 
 ---
-
 ## Feature: Enhanced Export System — Format-Specific Generation
 
 ### Export Format Specifications
 
 #### Mermaid Export (.md)
+
+**File envelope**
+- **Front-matter** (YAML) at top of file:
+  - `title` (string), `methodology` (“BDD”/“DDD”), `diagram_type` (“flowchart”/“sequence”)
+  - `flow_direction` (one of `LR`, `TD`, `RL`, `BT`) — resolved by **UI > metadata > default (LR)**
+  - `version` (int, incremented), `generated_at` (ISO 8601)
+- One fenced ```mermaid block containing the diagram.
+- No other code blocks in the file.
+
+**Header + comments**
+- First line of the mermaid block is `flowchart ${direction}` (e.g., `flowchart LR`).
+- Insert comments for traceability:
+  - `%% Flow Title: …`
+  - `%% Primary Outcomes: …`
+  - `%% Timers: …`
+  - `%% Direction Source: UI | metadata | default`
+
+**Node/edge generation rules**
+-# BDD — Feature: Node & Edge Generation Rules (Mermaid Flowchart Export)
+
+Background:
+  Given the exporter is generating a Mermaid flowchart
+  And the flow direction has been resolved (e.g., LR)
+  And nodes and edges have been parsed from the input document
+
+@ids
+Scenario Outline: Generate stable node IDs from labels and resolve collisions
+  Given a node label "<label>"
+  When the exporter generates the node ID
+  Then the ID equals the label with all non-alphanumeric characters removed, truncated to 12 characters
+  And if that ID is already used, the exporter appends a numeric suffix "-<n>" starting from 2
+
+  Examples:
+    | label                         | first_id       | second_id      |
+    | "Submit Claim"                | SubmitClaim    | SubmitClaim-2  |
+    | "Validate: Amount ≥ $50"      | ValidateAmoun  | ValidateAmoun-2|
+    | "Manager Review (SLA 7d)"     | ManagerReview  | ManagerReview-2|
+
+@shapes
+Scenario Outline: Map node types to Mermaid shapes
+  Given a node of type "<type>" with label "<text>"
+  When the exporter renders the node
+  Then the Mermaid shape is "<shape>"
+
+  Examples:
+    | type        | text                 | shape                         |
+    | Start       | Start                | ([Start])                     |
+    | End         | End                  | ([End])                       |
+    | Process     | Validate Claim       | [Validate Claim]              |
+    | Decision    | Approved?            | {Approved?}                   |
+    | Timer       | Timer: 7 days        | (["Timer: 7 days"])           |
+    | Annotation  | Escalate to delegate | (["Escalate to delegate"])    |
+    | Outcome     | Paid (Scheduled)     | [["Outcome: Paid (Scheduled)"]]| 
+
+@labels_binary
+Scenario: Label binary decision edges as Yes/No
+  Given a decision node with two branches
+  When the exporter emits edges
+  Then the affirmative branch label is "Yes"
+  And the negative branch label is "No"
+
+@labels_wrap
+Scenario Outline: Wrap long labels with <br/> for readability
+  Given a node label "<longLabel>"
+  When the label exceeds the configured width
+  Then the exporter inserts "<br/>" at natural breakpoints to prevent overflow
+
+  Examples:
+    | longLabel                                          |
+    | "Validate Claim (amount, date, category, totals)"  |
+    | "Schedule Payment <= 5 business days (shift if weekend/holiday)" |
+
+@labels_escape
+Scenario Outline: Escape special characters for Mermaid compatibility
+  Given a label containing "<raw>"
+  When rendering the label
+  Then the exporter outputs "<escaped>"
+
+  Examples:
+    | raw                           | escaped                          |
+    | "<= 5 business days"          | "&lt;= 5 business days"          |
+    | "Amount ≥ 50"                 | "Amount ≥ 50"                    |
+    | "x < y and y > z"             | "x &lt; y and y > z"             |
+
+@outcomes_singleton
+Scenario Outline: Create each outcome node once and reuse it
+  Given an outcome named "<name>"
+  And multiple branches point to that outcome
+  When the exporter generates nodes
+  Then only a single outcome node is created for "<name>"
+  And all branches link to the same node
+
+  Examples:
+    | name             |
+    | Paid (Scheduled) |
+    | Rejected         |
+    | Needs Receipt    |
+
+@outcomes_classes
+Scenario Outline: Apply visual classes to outcome nodes
+  Given an outcome named "<name>"
+  When rendering the node
+  Then the node receives the class "<class>"
+
+  Examples:
+    | name             | class    |
+    | Paid (Scheduled) | success  |
+    | Rejected         | failure  |
+    | Needs Receipt    | neutral  |
+
+@styling_defs
+Scenario: Emit class definitions once per diagram
+  Given the diagram includes outcomes with classes success, failure, and neutral
+  When writing the Mermaid block
+  Then the exporter emits class definitions:
+    | class   | style                                                                |
+    | success | fill:#e6ffe6,stroke:#0a0,stroke-width:1px,color:#073                 |
+    | failure | fill:#ffe6e6,stroke:#a00,stroke-width:1px,color:#722                 |
+    | neutral | fill:#eef3ff,stroke:#3357ff,stroke-width:1px,color:#244              |
+
+@timers
+Scenario: Represent timers as non-blocking annotations
+  Given a timer associated with a node (e.g., Manager Review)
+  When exporting
+  Then the timer is rendered as an annotation node (["…"])
+  And the anchor node connects to the timer with a dashed edge
+  And the timer connects to an escalation node which loops back to the anchor
+
+@acceptance
+Scenario: Export integrity for nodes and edges
+  Given the exporter has generated all nodes and edges
+  Then every node has a unique ID (after collision suffixing)
+  And decision edges are labeled per the Yes/No rule
+  And long labels are wrapped safely with "<br/>"
+  And special characters are escaped as specified
+  And outcome nodes are singletons with the correct visual classes
+
+- **SLA / timers**:
+  - Non-blocking link from anchor node with dashed edge (`---`).
+  - Timer node forwards to an Escalation node, which loops back to the anchor.
+
+**Styling block**
+- Emit class definitions once at the bottom (or top) of the block:
+  - `success`: `fill:#e6ffe6,stroke:#0a0,stroke-width:1px,color:#073`
+  - `failure`: `fill:#ffe6e6,stroke:#a00,stroke-width:1px,color:#722`
+  - `neutral`: `fill:#eef3ff,stroke:#3357ff,stroke-width:1px,color:#244`
+
+**Example (expanded, horizontal)**
 ```mermaid
 flowchart LR
   %% Flow Title: Employee Expense Reimbursement
   %% Primary Outcomes: Paid (Scheduled), Rejected, Needs Receipt
+  %% Timers: Manager Review SLA = 7 days (escalate to delegate; notify Finance)
+  %% Direction Source: default
 
-  A([Start]) --> B[Submit Claim]
-  B --> C[Validate Claim]
-  C --> D{Validation Passed?}
-  D -->|Yes| H[Manager Review]
-  D -->|No| E{Missing Receipt & Amount ≥ $50?}
-  E -->|Yes| F([Needs Receipt])
-  E -->|No| G([Rejected])
-  H --> I{Approved?}
-  I -->|Yes| J[Schedule Payment]
-  I -->|No| G
-  J --> Z([Paid (Scheduled)])
-```
+  %% Core nodes
+  A([Start])
+  B[Submit Claim]
+  DUP{Duplicate submission?}
+  MERGE[De-duplicate<br/>Keep latest<br/>Re-validate]
+  C[Validate Claim<br/>(amount, date, category, totals)]
+  D1{Missing receipt?<br/>amount ≥ 50 AND no receipt}
+  D2{Other validation failures?<br/>(over limit > 200,<br/>invalid category,<br/>negative total,<br/>late submission > 60d)}
+  H[Manager Review]
+  I{Approved?}
+  P[Schedule Payment<br/>&lt;= 5 business days<br/>(shift if weekend/holiday)]
+  SLA(["Timer: 7 days<br/>no manager action"])
+  ESC[Escalate to delegate<br/>Notify Finance]
+
+  %% Outcomes (singletons)
+  OUT_NEEDS[["Outcome: Needs Receipt"]]
+  OUT_REJ[["Outcome: Rejected"]]
+  OUT_PAID[["Outcome: Paid (Scheduled)"]]
+
+  %% Flow (LR)
+  A --> B
+  B --> DUP
+  DUP -- Yes --> MERGE --> C
+  DUP -- No --> C
+
+  C --> D1
+  D1 -- Yes --> OUT_NEEDS:::neutral
+  D1 -- No --> D2
+  D2 -- Yes --> OUT_REJ:::failure
+  D2 -- No --> H
+
+  H --> I
+  I -- Yes --> P --> OUT_PAID:::success
+  I -- No --> OUT_REJ:::failure
+
+  %% SLA branch (non-blocking)
+  H --- SLA
+  SLA --> ESC --> H
+
+  %% Styling
+  classDef success fill:#e6ffe6,stroke:#0a0,stroke-width:1px,color:#073;
+  classDef failure fill:#ffe6e6,stroke:#a00,stroke-width:1px,color:#722;
+  classDef neutral fill:#eef3ff,stroke:#3357ff,stroke-width:1px,color:#244;
+
 
 #### Human-Readable Export (.md)
 - **Flowchart format**: Step-by-step breakdown with Given/When/Then structure
@@ -562,6 +816,8 @@ And I can **import different content** without restart
 - ✅ **Fit-to-screen**: Automatic centering and scaling for optimal viewing
 
 ---
+
+# Further example to reinforce learning 
 
 ## Example — Generated Mermaid with Horizontal Layout and Labels
 ```mermaid
