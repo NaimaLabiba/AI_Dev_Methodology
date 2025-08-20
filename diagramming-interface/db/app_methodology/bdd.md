@@ -1,10 +1,10 @@
 # BDD Specification — Diagramming Interface for a Web Application
 
-A minimal, local-first diagramming app with **auto-rendering workflow**. Focus: **make the canvas feel alive** (move, connect, zoom) and **turn plain Markdown into a rendered flowchart with immediate visual feedback**.
+A minimal, local-first diagramming web app with **auto-rendering workflow**. Focus: **make the canvas feel alive** (move, connect, zoom) and **turn plain Markdown into a rendered flowchart with immediate visual feedback**.
 
 ---
 
-## Minimal Canvas (v1)
+## Minimal Canvas 
 
 > **Methodology Header Requirement:** The app must display the current methodology title (e.g., **"BDD"**) **fixed at the top-right** of the canvas viewport at all times.
 
@@ -40,21 +40,21 @@ A minimal, local-first diagramming app with **auto-rendering workflow**. Focus: 
 ## Auto-Rendering Workflow — Immediate Visual Feedback
 
 ### Core Auto-Rendering Features
-- **Automatic rendering**: Diagrams render immediately after successful import without manual "Render" button clicks
-- **Loading indicators**: Visual feedback during import and rendering process
-- **Success notifications**: Shows element count and confirmation after auto-rendering
-- **Fit-to-screen**: Automatically centers and scales imported diagrams for optimal viewing
-- **Error handling**: Clear feedback for parsing failures with canvas preservation
+- **Automatic rendering**: Diagrams render immediately after successful import without manual "Render" button clicks.
+- **Loading indicators**: Visual feedback during import and rendering process.
+- **Success notifications**: Shows element count and confirmation after auto-rendering.
+- **Fit-to-screen**: Automatically centers and scales imported diagrams for optimal viewing.
+- **Error handling**: Clear feedback for parsing failures with canvas preservation.
 
 ### Auto-Rendering Implementation
 When you import a markdown file, the application automatically performs these steps in sequence:
 
-1. **Display loading message**: Shows "Importing and auto-rendering diagram..." to keep you informed
-2. **Process the file content**: Reads and interprets the markdown structure and converts it to diagram elements
-3. **Place elements on canvas**: Positions all shapes and connections according to the horizontal layout rules
-4. **Render immediately**: Draws the complete diagram on the canvas without waiting for you to click anything
-5. **Fit to screen**: Automatically adjusts zoom and position so you can see the entire diagram clearly
-6. **Show confirmation**: Displays a success message telling you exactly how many elements and connections were created
+1. **Display loading message**: Shows "Importing and auto-rendering diagram..." to keep you informed.  
+2. **Process the file content**: Reads and interprets the markdown structure and converts it to diagram elements.  
+3. **Place elements on canvas**: Positions all shapes and connections according to the horizontal layout rules.  
+4. **Render immediately**: Draws the complete diagram on the canvas without waiting for you to click anything.  
+5. **Fit to screen**: Automatically adjusts zoom and position so you can see the entire diagram clearly.  
+6. **Show confirmation**: Displays a success message telling you exactly how many elements and connections were created.
 
 This entire process happens automatically in one smooth workflow, eliminating the need to manually click "Render" after importing.
 
@@ -63,11 +63,11 @@ This entire process happens automatically in one smooth workflow, eliminating th
 ## Horizontal Layout System — Left-to-Right Flow
 
 ### Layout Specifications
-- **Primary direction**: Left-to-Right (LR) for all flowcharts
-- **Coordinate system**: Elements positioned with horizontal progression
-- **Spacing**: Minimum 50px horizontal spacing between elements
-- **Vertical alignment**: Decision branches use Y-offset positioning
-- **Mermaid export**: All flowcharts use `flowchart LR` syntax
+- **Primary direction**: Left-to-Right (LR) for all flowcharts.
+- **Coordinate system**: Elements positioned with horizontal progression.
+- **Spacing**: Minimum 50px horizontal spacing between elements.
+- **Vertical alignment**: Decision branches use Y-offset positioning.
+- **Mermaid export**: All flowcharts use `flowchart LR` syntax.
 
 # BDD — Feature: Horizontal Coordinate Mapping (Left→Right flow with vertical branches)
 
@@ -113,12 +113,11 @@ Scenario: Visual and semantic guarantees
   And “Yes” edges connect to the upper target at (800, 100)
   And “No” edges connect to the lower target at (800, 280)
 
-
 ### Benefits of Horizontal Layout
-- **Natural reading flow**: Left-to-right matches reading patterns
-- **Better screen utilization**: Wider screens accommodate longer processes
-- **Clearer decision branches**: Vertical separation for Yes/No paths
-- **Improved scalability**: Easier to extend processes horizontally
+- **Natural reading flow**: Left-to-right matches reading patterns.
+- **Better screen utilization**: Wider screens accommodate longer processes.
+- **Clearer decision branches**: Vertical separation for Yes/No paths.
+- **Improved scalability**: Easier to extend processes horizontally.
 
 ---
 
@@ -127,8 +126,8 @@ Scenario: Visual and semantic guarantees
 ### Supported input (any one of these works)
 1) **Full MD with Mermaid** (has a ```mermaid``` block).  
 2) **Business MD without Mermaid** (e.g., "Employee Expense Reimbursement") that contains:
-   - A heading with **Methodology** and **Diagram Type**
-   - A **Behavior/Flow** section OR Gherkin **Scenarios**
+   - A heading with **Methodology** and **Diagram Type**  
+   - A **Behavior/Flow** section OR Gherkin **Scenarios**  
    - Optional **Parser Hints**
 3) **Sequence Diagrams** with participant and message definitions
 
@@ -138,14 +137,14 @@ Scenario: Visual and semantic guarantees
 - **"When … Then …"** pairs → **directed edge** from the current step to the next described action/step.  
 - **"Outcome → NAME"** → **terminal node** (End state).  
 - **SLA/Escalation** notes attach metadata to the **current node**.  
-- **Decision branches** automatically get **Yes/No labels** on connections.
+- **Decision branches** automatically get **Yes/No labels** on connections.  
 - If both **Mermaid** and **plain flow** exist: **Mermaid wins** by default; user can switch to **Rebuild from Flow**.
 
 ### Sequence Diagram Parsing
-- **Participants**: Extracted from `participants:` section in Diagram Input
-- **Messages**: Parsed from `messages:` section with format `- From -> To: Message`
-- **Lifelines**: Automatically generated for each participant
-- **Message arrows**: Positioned based on participant order and message sequence
+- **Participants**: Extracted from `participants:` section in Diagram Input.  
+- **Messages**: Parsed from `messages:` section with format `- From -> To: Message`.  
+- **Lifelines**: Automatically generated for each participant.  
+- **Message arrows**: Positioned based on participant order and message sequence.
 
 ---
 
@@ -191,6 +190,14 @@ Given the header shows "BDD"
 When I import a file with Methodology "DDD"  
 Then the header **automatically updates** to "DDD"  
 And the diagram **auto-renders** with the new methodology context
+
+**Scenario: Auto-rendering failure handling**  
+Given I import a `.md` with parsing errors  
+When the auto-rendering process encounters issues  
+Then the **loading indicator disappears**  
+And an **error message** specifies the parsing problem  
+And the **canvas remains unchanged** (no corruption)  
+And I can **retry with corrected input**
 
 ---
 
@@ -269,23 +276,23 @@ Then all format options are **enabled and functional**
 ## Feature: Decision Branch Labeling — Yes/No Path Clarity
 
 ### Label Implementation
-- **Automatic labeling**: Decision branches get Yes/No labels based on the flow logic
-- **Visual display**: Labels appear at the middle of connection lines using clear, readable text
-- **Export preservation**: Labels are maintained in both Mermaid and human-readable exports
-- **Smart labeling**: The system automatically determines which path should be labeled "Yes" and which should be "No"
+- **Automatic labeling**: Decision branches get Yes/No labels based on the flow logic.
+- **Visual display**: Labels appear at the middle of connection lines using clear, readable text.
+- **Export preservation**: Labels are maintained in both Mermaid and human-readable exports.
+- **Smart labeling**: The system automatically determines which path should be labeled "Yes" and which should be "No".
 
 ### Label Specifications
 When you have decision points in your diagram, the connections automatically get labeled:
 
-- **Yes path**: The approval or positive outcome route gets a "Yes" label
-- **No path**: The rejection or negative outcome route gets a "No" label
-- **Nested decisions**: Multiple decision points each get their own Yes/No labels
-- **Visual clarity**: Labels help users understand which path represents which decision outcome
+- **Yes path**: The approval or positive outcome route gets a "Yes" label.
+- **No path**: The rejection or negative outcome route gets a "No" label.
+- **Nested decisions**: Multiple decision points each get their own Yes/No labels.
+- **Visual clarity**: Labels help users understand which path represents which decision outcome.
 
 For example, in an expense reimbursement process:
-- "Validation Passed?" → "Yes" leads to Manager Review
-- "Validation Passed?" → "No" leads to Receipt Decision
-- "Missing Receipt?" → "Yes" leads to Needs Receipt outcome
+- "Validation Passed?" → "Yes" leads to Manager Review  
+- "Validation Passed?" → "No" leads to Receipt Decision  
+- "Missing Receipt?" → "Yes" leads to Needs Receipt outcome  
 - "Missing Receipt?" → "No" leads to Rejected outcome
 
 **Scenario: Decision branch auto-labeling**  
@@ -307,10 +314,10 @@ Then the documentation **describes the decision logic** with clear branching exp
 ## Feature: Sequence Diagram Support — Full Implementation
 
 ### Sequence Diagram Capabilities
-- **Participant management**: Automatic participant extraction and positioning
-- **Lifeline generation**: Vertical lifelines for each participant with multiple connection points
-- **Message flow**: Chronological message positioning with proper arrow directions
-- **Export formats**: Both Mermaid sequence syntax and rich human-readable documentation
+- **Participant management**: Automatic participant extraction and positioning.
+- **Lifeline generation**: Vertical lifelines for each participant with multiple connection points.
+- **Message flow**: Chronological message positioning with proper arrow directions.
+- **Export formats**: Both Mermaid sequence syntax and rich human-readable documentation.
 
 ### Sequence Layout System
 # BDD — Feature: Sequence Layout System (Participants, Lifelines, Messages)
@@ -330,6 +337,7 @@ Scenario Outline: Position participants left-to-right with even spacing
 
   Examples:
     | idx | participantX | participantY |
+    |-----|--------------|--------------|
     | 0   | 100          | 50           |
     | 1   | 250          | 50           |
     | 2   | 400          | 50           |
@@ -344,6 +352,7 @@ Scenario Outline: Center each lifeline under its participant and extend downward
 
   Examples:
     | participantX | lifelineX | lifelineY | lifelineHeight |
+    |--------------|-----------|-----------|----------------|
     | 100          | 159       | 90        | 500            |
     | 250          | 309       | 90        | 500            |
 
@@ -356,6 +365,7 @@ Scenario Outline: Place messages top-to-bottom in chronological order
 
   Examples:
     | midx | messageY |
+    |------|----------|
     | 0    | 150      |
     | 1    | 195      |
     | 5    | 375      |
@@ -366,7 +376,6 @@ Scenario: Visual consistency and ordering guarantees
   Then participants are evenly spaced with a 100px left margin and a 150px step
   And each lifeline is centered under its participant (offset +59), begins at Y=90, and has height 500
   And messages stack from Y=150 downward in 45px increments following chronological order
-
 
 **Scenario: Import sequence diagram with auto-rendering**  
 Given a `.md` file with sequence diagram structure containing participants and messages  
@@ -393,29 +402,6 @@ Then the output includes:
 - **Message Flow section**: Step-by-step exchanges with Given/When/Then format  
 - **Interaction Summary**: Overview of the communication pattern  
 - **Business Rules**: Process validation and interaction requirements
-
----
-
-## Feature: Import Business Input File with Auto-Rendering
-
-**Scenario: Import with immediate visual feedback**  
-Given an empty canvas  
-And I have a `.md` file (flowchart or sequence)  
-When I click **Import (.md)** and select the file  
-Then the app **immediately shows loading indicator** with descriptive message  
-And parses Methodology, Diagram Type, and content structure  
-And **automatically renders the diagram** without waiting for manual render  
-And **fits diagram to screen** with optimal zoom and centering  
-And shows **success notification** with exact counts: "Diagram auto-rendered successfully - X elements, Y connections"  
-And the **Preview panel updates** with parsed summary
-
-**Scenario: Auto-rendering failure handling**  
-Given I import a `.md` with parsing errors  
-When the auto-rendering process encounters issues  
-Then the **loading indicator disappears**  
-And an **error message** specifies the parsing problem  
-And the **canvas remains unchanged** (no corruption)  
-And I can **retry with corrected input**
 
 ---
 
@@ -468,6 +454,7 @@ And **Yes/No labels** are visible at connection midpoints
 And **branch paths** are visually distinct with proper spacing
 
 ---
+
 ## Feature: Enhanced Export System — Format-Specific Generation
 
 ### Export Format Specifications
@@ -479,7 +466,7 @@ And **branch paths** are visually distinct with proper spacing
   - `title` (string), `methodology` (“BDD”/“DDD”), `diagram_type` (“flowchart”/“sequence”)
   - `flow_direction` (one of `LR`, `TD`, `RL`, `BT`) — resolved by **UI > metadata > default (LR)**
   - `version` (int, incremented), `generated_at` (ISO 8601)
-- One fenced ```mermaid block containing the diagram.
+- One fenced ```mermaid``` block containing the diagram.
 - No other code blocks in the file.
 
 **Header + comments**
@@ -490,8 +477,7 @@ And **branch paths** are visually distinct with proper spacing
   - `%% Timers: …`
   - `%% Direction Source: UI | metadata | default`
 
-**Node/edge generation rules**
--# BDD — Feature: Node & Edge Generation Rules (Mermaid Flowchart Export)
+# BDD — Feature: Node & Edge Generation Rules (Mermaid Flowchart Export)
 
 Background:
   Given the exporter is generating a Mermaid flowchart
@@ -518,13 +504,13 @@ Scenario Outline: Map node types to Mermaid shapes
   Then the Mermaid shape is "<shape>"
 
   Examples:
-    | type        | text                 | shape                         |
-    | Start       | Start                | ([Start])                     |
-    | End         | End                  | ([End])                       |
-    | Process     | Validate Claim       | [Validate Claim]              |
-    | Decision    | Approved?            | {Approved?}                   |
-    | Timer       | Timer: 7 days        | (["Timer: 7 days"])           |
-    | Annotation  | Escalate to delegate | (["Escalate to delegate"])    |
+    | type        | text                 | shape                          |
+    | Start       | Start                | ([Start])                      |
+    | End         | End                  | ([End])                        |
+    | Process     | Validate Claim       | [Validate Claim]               |
+    | Decision    | Approved?            | {Approved?}                    |
+    | Timer       | Timer: 7 days        | (["Timer: 7 days"])            |
+    | Annotation  | Escalate to delegate | (["Escalate to delegate"])     |
     | Outcome     | Paid (Scheduled)     | [["Outcome: Paid (Scheduled)"]]| 
 
 @labels_binary
@@ -543,7 +529,7 @@ Scenario Outline: Wrap long labels with <br/> for readability
   Examples:
     | longLabel                                          |
     | "Validate Claim (amount, date, category, totals)"  |
-    | "Schedule Payment <= 5 business days (shift if weekend/holiday)" |
+    | "Schedule Payment &lt;= 5 business days (shift if weekend/holiday)" |
 
 @labels_escape
 Scenario Outline: Escape special characters for Mermaid compatibility
@@ -563,7 +549,7 @@ Scenario Outline: Create each outcome node once and reuse it
   And multiple branches point to that outcome
   When the exporter generates nodes
   Then only a single outcome node is created for "<name>"
-  And all branches link to the same node
+  And all branches link to that outcome
 
   Examples:
     | name             |
@@ -674,16 +660,18 @@ flowchart LR
 
 
 #### Human-Readable Export (.md)
-- **Flowchart format**: Step-by-step breakdown with Given/When/Then structure
-- **Sequence format**: Participant interactions with message flow documentation
-- **Decision documentation**: Clear explanation of branching logic
-- **Outcome mapping**: Terminal states with business context
+- **Flowchart format**: Step-by-step breakdown with Given/When/Then structure.
+- **Sequence format**: Participant interactions with message flow documentation.
+- **Decision documentation**: Clear explanation of branching logic.
+- **Outcome mapping**: Terminal states with business context.
+- **Parity**: Content mirrors the **current canvas state** (round-trip safe).
 
 #### Image Export (PNG/SVG)
-- **Bounds calculation**: Automatic sizing around all elements with 50px padding
-- **Scale options**: 1x, 2x, 3x resolution for PNG
-- **Background options**: White or transparent
-- **Vector precision**: SVG maintains infinite scalability
+- **Bounds calculation**: Automatic sizing around all elements with **≥ 50px** padding (minimum).
+- **Scale options**: 1×, 2×, 3× (1× ≈ canvas pixels at ~96 DPI).
+- **Background options**: White or transparent (PNG supports transparency).
+- **Vector precision (SVG)**: Maintains infinite scalability; text remains `<text>` elements with proper positioning.
+- **Label fidelity**: **Yes/No branch labels** and other edge labels are rendered in both PNG and SVG.
 
 **Scenario: Export format detection and generation**  
 Given a **flowchart** diagram on canvas  
@@ -697,30 +685,29 @@ And includes **Yes/No labels** in connection syntax
 Given a **sequence** diagram on canvas  
 When I export as **Human-readable (.md)**  
 Then the output includes:  
-- **Participants section**: `- **Customer UI**: System actor in the interaction`  
+- **Participants section**: Lists all actors with descriptions  
 - **Message Flow section**: `**Step 1**: Customer UI → Web App` with Given/When/Then format  
 - **Interaction Summary**: Process overview with participant count and message count  
-- **Business Rules**: Validation requirements and process constraints
+- **Business Rules**: Process validation and constraints  
+And arrow semantics in documentation reflect the diagram (e.g., async `->>` vs sync `->`)
 
 ---
 
 ## Feature: Connection Management with Labeling
 
 ### Connection Types and Labels
-- **Standard connections**: Unlabeled arrows for sequential flow
-- **Decision connections**: Labeled with Yes/No for branching logic
-- **Message connections**: Labeled with message content for sequences
-- **Timer connections**: Dashed lines for SLA escalations
+- **Standard connections**: Unlabeled arrows for sequential flow.
+- **Decision connections**: Labeled with Yes/No for branching logic.
+- **Message connections**: Labeled with message content for sequences.
+- **Timer connections**: Dashed lines for SLA escalations.
 
 ### Connection Implementation
 The application creates different types of connections based on the diagram flow:
 
-- **Standard connections**: Simple arrows that connect one step to the next in sequence
-- **Labeled connections**: Decision branch arrows that display "Yes" or "No" to show which path represents which choice
-- **Connection positioning**: Labels appear at the middle point of each connection line for clear visibility
-- **Automatic detection**: The system determines when labels are needed based on whether the connection comes from a decision point
-
-When you create a flowchart with decision points, the application automatically adds appropriate labels to help users understand the flow logic.
+- **Standard connections**: Simple arrows that connect one step to the next in sequence.
+- **Labeled connections**: Decision branch arrows that display "Yes" or "No" to show which path represents which choice.
+- **Connection positioning**: Labels appear at the middle point of each connection line for clear visibility.
+- **Automatic detection**: The system determines when labels are needed based on whether the connection comes from a decision point.
 
 **Scenario: Automatic decision branch labeling**  
 Given a decision node with multiple outgoing connections  
@@ -729,6 +716,7 @@ Then **approval paths** get **"Yes"** labels automatically
 And **rejection paths** get **"No"** labels automatically  
 And labels are **positioned at connection midpoints**  
 And labels use **consistent styling** across all connections
+
 
 ---
 
