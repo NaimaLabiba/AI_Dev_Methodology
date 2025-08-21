@@ -109,14 +109,7 @@ server.listen(PORT, () => {
     console.log(`   http://localhost:${PORT}`);
     console.log(`   http://127.0.0.1:${PORT}`);
     console.log('');
-    console.log('📋 Features Available:');
-    console.log('   • BDD Methodology Header (Fixed Top-Right)');
-    console.log('   • Flow & Sequence Diagram Support');
-    console.log('   • Markdown Import/Export');
-    console.log('   • Business Outcomes Visualization');
-    console.log('   • Interactive Canvas with Pan/Zoom');
-    console.log('   • Shape Creation & Connection Tools');
-    console.log('   • Properties Panel & Layers');
+
     console.log('');
     console.log('🎯 Press Ctrl+C to stop the server');
 });
