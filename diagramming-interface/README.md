@@ -2,7 +2,7 @@
 
 A comprehensive web-based diagramming tool focused on Behavior-Driven Development (BDD) methodology, featuring auto-rendering capabilities and interactive canvas-based diagram creation.
 
-## 🚀 Core Features
+##  Core Features
 
 ### Auto-Rendering System
 - **Instant Diagram Generation**: Automatic rendering of diagrams immediately after markdown import
@@ -32,7 +32,7 @@ A comprehensive web-based diagramming tool focused on Behavior-Driven Developmen
 - **Modal-Based Interface**: Clean import/export workflow with file upload
 - **Cross-Format Compatibility**: Seamless conversion between different diagram formats
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 - **Frontend**: Pure HTML5, CSS3, JavaScript (ES6+)
 - **Canvas**: HTML5 Canvas API for high-performance rendering
@@ -40,7 +40,7 @@ A comprehensive web-based diagramming tool focused on Behavior-Driven Developmen
 - **Server**: Node.js HTTP server (port 4003)
 - **Styling**: Modern CSS with BDD-focused design patterns
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 diagramming-interface/
@@ -65,37 +65,181 @@ diagramming-interface/
             └── ...             # Additional mermaid files
 ```
 
-## 🚀 Getting Started
+##  Getting Started
 
-### Start the BDD Server
+### Prerequisites
+
+Before running the BDD Diagramming Interface, ensure you have the following installed:
+
+#### Required Software
+- **Node.js** (version 14.0 or higher)
+  - Download from: https://nodejs.org/
+  - Verify installation: `node --version`
+- **Modern Web Browser** (Chrome, Firefox, Safari, or Edge)
+  - Required for HTML5 Canvas support and ES6+ JavaScript features
+
+#### System Requirements
+- **Operating System**: Windows, macOS, or Linux
+- **RAM**: Minimum 4GB (8GB recommended for large diagrams)
+- **Storage**: At least 100MB free space
+- **Network**: Internet connection for initial setup (optional for offline use)
+
+### Installation Steps
+
+#### Step 1: Download/Clone the Project
 ```bash
-# Navigate to project directory
+# If using Git
+git clone <your-repository-url>
+cd diagramming-interface
+
+# Or download and extract the ZIP file, then navigate to the folder
+cd path/to/diagramming-interface
+```
+
+#### Step 2: Verify Node.js Installation
+```bash
+# Check Node.js version (should be 14.0+)
+node --version
+
+# Check npm version
+npm --version
+```
+
+#### Step 3: Navigate to Project Directory
+```bash
+# Ensure you're in the correct directory
+cd diagramming-interface
+ls -la  # Should show bdd-server.js, bdd-interface.html, etc.
+```
+
+### Running the Application
+
+#### Start the BDD Server
+```bash
+# Navigate to project directory (if not already there)
 cd diagramming-interface
 
 # Start the BDD server
 node bdd-server.js
-
-# Open browser and go to:
-# http://localhost:4003
 ```
 
-### Server Output
+#### Expected Server Output
 ```
 🟢 BDD Diagramming Interface Server running at:
    http://localhost:4003
    http://127.0.0.1:4003
 
-📋 Features Available:
-   • BDD Methodology Header (Fixed Top-Right)
-   • Flow & Sequence Diagram Support
-   • Markdown Import/Export
-   • Business Outcomes Visualization
-   • Interactive Canvas with Pan/Zoom
-   • Shape Creation & Connection Tools
-   • Properties Panel & Layers
+🎯 Press Ctrl+C to stop the server
 ```
 
-## 🎮 How to Use
+#### Access the Application
+1. **Open your web browser**
+2. **Navigate to**: `http://localhost:4003`
+3. **The BDD Diagramming Interface should load automatically**
+
+### Troubleshooting
+
+#### Common Issues and Solutions
+
+**Port Already in Use Error**
+```bash
+# Error: EADDRINUSE: address already in use :::4003
+# Solution 1: Kill existing process
+netstat -ano | findstr :4003  # Find the PID
+taskkill /PID <PID> /F         # Kill the process
+
+# Solution 2: Use different port (modify bdd-server.js)
+# Change PORT = 4003 to PORT = 4004 or another available port
+```
+
+**Node.js Not Found**
+```bash
+# Install Node.js from https://nodejs.org/
+# Restart your terminal/command prompt after installation
+# Verify: node --version
+```
+
+**Permission Denied (Linux/macOS)**
+```bash
+# If you get permission errors, try:
+sudo node bdd-server.js
+# Or fix file permissions:
+chmod +x bdd-server.js
+```
+
+**Browser Compatibility Issues**
+- Use a modern browser (Chrome 80+, Firefox 75+, Safari 13+, Edge 80+)
+- Enable JavaScript in your browser settings
+- Clear browser cache if experiencing issues
+
+### First Time Setup
+
+#### 1. Test the Server
+- Start the server using the steps above
+- Verify you see the success message
+- Open `http://localhost:4003` in your browser
+
+#### 2. Test Core Functionality
+- **Import Test**: Try importing a sample BDD markdown file
+- **Canvas Test**: Verify you can pan and zoom the canvas
+- **Export Test**: Test exporting in different formats
+
+#### 3. Verify File Structure
+Ensure your project structure matches:
+```
+diagramming-interface/
+├── bdd-interface.html     ✓ Main interface file
+├── bdd-script-complete.js ✓ Core functionality
+├── bdd-server.js         ✓ Server file
+├── bdd-styles.css        ✓ Styling
+└── db/app_methodology/   ✓ BDD methodology files
+```
+
+### Development Environment Setup
+
+#### For Development/Customization
+```bash
+# Optional: Install development tools
+npm init -y                    # Initialize package.json
+npm install --save-dev nodemon # Auto-restart server on changes
+
+# Run with auto-restart (if nodemon installed)
+npx nodemon bdd-server.js
+
+# Or use the standard approach
+node bdd-server.js
+```
+
+#### Environment Variables (Optional)
+```bash
+# Set custom port (Windows)
+set PORT=4004 && node bdd-server.js
+
+# Set custom port (Linux/macOS)
+PORT=4004 node bdd-server.js
+```
+
+### Quick Start Checklist
+
+- [ ] Node.js installed (version 14.0+)
+- [ ] Project files downloaded/cloned
+- [ ] Terminal/Command prompt opened
+- [ ] Navigated to `diagramming-interface` directory
+- [ ] Ran `node bdd-server.js`
+- [ ] Saw success message with server URLs
+- [ ] Opened `http://localhost:4003` in browser
+- [ ] BDD Diagramming Interface loaded successfully
+- [ ] Tested import/export functionality
+
+### Next Steps
+
+Once the application is running:
+1. **Import a BDD file** to test auto-rendering
+2. **Explore the canvas** with pan and zoom controls
+3. **Try different export formats** to understand capabilities
+4. **Review the methodology files** in `db/app_methodology/`
+
+##  How to Use
 
 ### Auto-Rendering Workflow
 1. **Import File**: Click Import button and select your BDD markdown file
@@ -116,7 +260,7 @@ node bdd-server.js
 - **Select**: Click elements to select and modify
 - **Connect**: Use connection points to link diagram elements
 
-## 🏗️ Architecture
+##  Architecture
 
 ### Core Classes
 
@@ -134,7 +278,7 @@ Specialized parser for BDD specifications:
 - Element positioning and connections
 - Business outcome extraction
 
-## 🎯 BDD Integration
+##  BDD Integration
 
 ### Methodology Support
 - **Flow Diagrams**: Visual representation of BDD workflows
@@ -148,11 +292,11 @@ Specialized parser for BDD specifications:
 - **Connection Management**: Smart linking of related BDD elements
 - **Success Feedback**: Clear indication of successful processing
 
-## 📚 Useful Links
+##  Useful Links
 
 <!-- Links to be added -->
 
-## 🔧 Customization
+##  Customization
 
 ### Adding New BDD Templates
 1. Create new specification files in `db/app_methodology/input_files/`
@@ -166,27 +310,9 @@ Specialized parser for BDD specifications:
 3. Update export modal with new option
 4. Test cross-format compatibility
 
-## 🚀 Future Enhancements
 
-- **Real-time Collaboration**: Multi-user BDD diagram editing
-- **Template Library**: Pre-built BDD diagram templates
-- **Advanced BDD Parsing**: Enhanced specification interpretation
-- **Integration APIs**: Connect with BDD testing frameworks
-- **Version Control**: Track changes in BDD specifications
-
-## 🤝 Contributing
-
-This BDD Diagramming Interface demonstrates modern web development practices with methodology-focused design. Contributions welcome for:
-- Enhanced BDD parsing capabilities
-- Additional export formats
-- UI/UX improvements for BDD workflows
-- Performance optimizations
-- Accessibility enhancements
-
-## 📄 License
+##  License
 
 Created for BDD methodology education and practical application in software development workflows.
 
 ---
-
-**Built with ❤️ for Behavior-Driven Development practitioners and teams.**
